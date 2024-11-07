@@ -97,7 +97,7 @@ const SpawnChanceGraph = () => {
     // UseCallback for fetchData
     const fetchData = useCallback(async () => {
         try {
-            let url = process.env.REACT_APP_API_URL + `/api/spawnchance?`;
+            let url = process.env.REACT_APP_API_URL + `api/spawnchance?`;
             if (mapName) url += `mapName=${mapName}&`;
             if (bossName) url += `bossName=${bossName}&`;
             if (startDate) url += `startDate=${startDate}&`;
