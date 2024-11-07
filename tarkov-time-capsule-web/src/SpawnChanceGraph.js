@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Line } from 'react-chartjs-2';
 import {
     Chart as ChartJS,
@@ -12,7 +12,6 @@ import {
     TimeScale,
 } from 'chart.js';
 import 'chartjs-adapter-date-fns'; // Import the date adapter
-
 
 // Register the components you are using
 ChartJS.register(
@@ -38,42 +37,15 @@ const SpawnChanceGraph = () => {
     const formatDate = (date) => date.toISOString().split('T')[0];
 
     // State variables
-    const [data, setData] = useState(null);
+    //const [data, setData] = useState(null);
     const [mapName, setMapName] = useState('');
     const [bossName, setBossName] = useState('');
     const [startDate, setStartDate] = useState(formatDate(defaultStartDate)); // Default to one week prior
     const [endDate, setEndDate] = useState(formatDate(defaultEndDate)); // Default to tomorrow
     const [chartData, setChartData] = useState(null);
 
-    // Fetch data only when the button is pressed or when the component is first mounted
-    const fetchData = useCallback(async () => {
-        try {
-            let url = `http://localhost:8787/api/spawnchance?`;
-            if (mapName) url += `mapName=${mapName}&`;
-            if (bossName) url += `bossName=${bossName}&`;
-            if (startDate) url += `startDate=${startDate}&`;
-            if (endDate) url += `endDate=${endDate}&`;
-
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`API request failed with status ${response.status}`);
-            }
-
-            const result = await response.json();
-            prepareChartData(result); // Update the chart data once the data is fetched
-        } catch (error) {
-            console.error("Error fetching data:", error);
-        }
-    }, [mapName, bossName, startDate, endDate]); // Add dependencies
-
-    // Update useEffect to use the new fetchData function
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
-
     // Prepare the data for the chart
-    const prepareChartData = (apiData) => {
+    const prepareChartData = useCallback((apiData) => {
         if (!apiData) {
             return;
         }
@@ -120,8 +92,34 @@ const SpawnChanceGraph = () => {
         setChartData({
             datasets: Object.values(groupedData),
         });
-    };
-    
+    }, [mapName, bossName]); // Add dependencies for mapName and bossName
+
+    // UseCallback for fetchData
+    const fetchData = useCallback(async () => {
+        try {
+            let url = `http://localhost:8787/api/spawnchance?`;
+            if (mapName) url += `mapName=${mapName}&`;
+            if (bossName) url += `bossName=${bossName}&`;
+            if (startDate) url += `startDate=${startDate}&`;
+            if (endDate) url += `endDate=${endDate}&`;
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`API request failed with status ${response.status}`);
+            }
+
+            const result = await response.json();
+            prepareChartData(result); // Update the chart data once the data is fetched
+        } catch (error) {
+            console.error("Error fetching data:", error);
+        }
+    }, [mapName, bossName, startDate, endDate, prepareChartData]); // Add `prepareChartData` to dependencies
+
+    // Load data when the component mounts
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]); // Add `fetchData` as a dependency
+
     // Boss and Map options
     const bossOptions = [
         'Infected Tagilla',
