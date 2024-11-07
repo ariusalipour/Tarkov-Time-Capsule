@@ -39,7 +39,7 @@ async function processAndInsertData(data: { maps: Map[] }, d1: D1Database) {
 		.first();
 
 	if (existingTimestamp) {
-		timestampId = existingTimestamp.TimestampID;
+		timestampId = <number>existingTimestamp.TimestampID;
 	} else {
 		const timestampResult = await d1.prepare('INSERT INTO Timestamps (Timestamp) VALUES (?)')
 			.bind(currentTimestamp)
@@ -56,7 +56,7 @@ async function processAndInsertData(data: { maps: Map[] }, d1: D1Database) {
 			.first();
 
 		if (existingMap) {
-			mapId = existingMap.MapID;
+			mapId = <number>existingMap.MapID;
 		} else {
 			// Insert the map if it doesn't exist
 			const mapResult = await d1.prepare('INSERT INTO Maps (MapName) VALUES (?)')
@@ -73,7 +73,7 @@ async function processAndInsertData(data: { maps: Map[] }, d1: D1Database) {
 				.first();
 
 			if (existingBoss) {
-				bossId = existingBoss.BossID;
+				bossId = <number>existingBoss.BossID;
 			} else {
 				// Insert the boss if it doesn't exist
 				const bossResult = await d1.prepare('INSERT INTO Bosses (BossName) VALUES (?)')
