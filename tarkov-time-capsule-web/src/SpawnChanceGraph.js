@@ -243,7 +243,6 @@ const SpawnChanceGraph = () => {
                                         text: 'Spawn Chance (%)',
                                     },
                                     min: 0,
-                                    max: 10000,
                                 },
                             },
                         }}
