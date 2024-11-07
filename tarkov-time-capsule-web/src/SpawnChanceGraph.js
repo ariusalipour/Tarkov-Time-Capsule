@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Line } from 'react-chartjs-2';
 import {
     Chart as ChartJS,
@@ -12,6 +12,7 @@ import {
     TimeScale,
 } from 'chart.js';
 import 'chartjs-adapter-date-fns'; // Import the date adapter
+
 
 // Register the components you are using
 ChartJS.register(
@@ -45,11 +46,9 @@ const SpawnChanceGraph = () => {
     const [chartData, setChartData] = useState(null);
 
     // Fetch data only when the button is pressed or when the component is first mounted
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         try {
-            const baseUrl = process.env.REACT_APP_API_URL || 'https://tarkov-time-capsule-api.aryan-alipour.workers.dev/api/spawnchance';
-            let url = `${baseUrl}?`;
-
+            let url = `http://localhost:8787/api/spawnchance?`;
             if (mapName) url += `mapName=${mapName}&`;
             if (bossName) url += `bossName=${bossName}&`;
             if (startDate) url += `startDate=${startDate}&`;
@@ -61,12 +60,16 @@ const SpawnChanceGraph = () => {
             }
 
             const result = await response.json();
-            setData(result);
             prepareChartData(result); // Update the chart data once the data is fetched
         } catch (error) {
             console.error("Error fetching data:", error);
         }
-    };
+    }, [mapName, bossName, startDate, endDate]); // Add dependencies
+
+    // Update useEffect to use the new fetchData function
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
 
     // Prepare the data for the chart
@@ -118,12 +121,7 @@ const SpawnChanceGraph = () => {
             datasets: Object.values(groupedData),
         });
     };
-
-    // Load data when the component mounts
-    useEffect(() => {
-        fetchData();
-    }, []); // Empty dependency array means this effect runs once when the component mounts
-
+    
     // Boss and Map options
     const bossOptions = [
         'Infected Tagilla',
