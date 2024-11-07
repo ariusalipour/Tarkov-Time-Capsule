@@ -159,12 +159,16 @@ const SpawnChanceGraph = () => {
     ];
 
     return (
-        <div>
+        <div style={{ backgroundColor: '#121212', color: '#FFFFFF', minHeight: '100vh', padding: '20px' }}>
             <h1>Tarkov Spawn Chance Data</h1>
-            <div>
-                <label>
+            <div style={{ marginBottom: '20px' }}>
+                <label style={{ marginRight: '15px' }}>
                     Map Name:
-                    <select value={mapName} onChange={(e) => setMapName(e.target.value)}>
+                    <select
+                        value={mapName}
+                        onChange={(e) => setMapName(e.target.value)}
+                        style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
+                    >
                         <option value="">Select Map</option>
                         {mapOptions.map((map, index) => (
                             <option key={index} value={map}>
@@ -173,9 +177,13 @@ const SpawnChanceGraph = () => {
                         ))}
                     </select>
                 </label>
-                <label>
+                <label style={{ marginRight: '15px' }}>
                     Boss Name:
-                    <select value={bossName} onChange={(e) => setBossName(e.target.value)}>
+                    <select
+                        value={bossName}
+                        onChange={(e) => setBossName(e.target.value)}
+                        style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
+                    >
                         <option value="">Select Boss</option>
                         {bossOptions.map((boss, index) => (
                             <option key={index} value={boss}>
@@ -184,25 +192,47 @@ const SpawnChanceGraph = () => {
                         ))}
                     </select>
                 </label>
-                <label>
+                <label style={{ marginRight: '15px' }}>
                     Start Date:
-                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                    <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
+                    />
                 </label>
-                <label>
+                <label style={{ marginRight: '15px' }}>
                     End Date:
-                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                    <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
+                    />
                 </label>
-                <div>
+                <div style={{ marginBottom: '15px', marginTop: '15px' }}>
                     <label>
                         Cap Spawn Chance at 100%:
                         <input
                             type="checkbox"
                             checked={capPercentage}
                             onChange={(e) => setCapPercentage(e.target.checked)}
+                            style={{ marginLeft: '10px' }}
                         />
                     </label>
                 </div>
-                <button onClick={fetchData}>Fetch Data</button>
+                <button
+                    onClick={fetchData}
+                    style={{
+                        backgroundColor: '#444444',
+                        color: '#FFFFFF',
+                        border: 'none',
+                        padding: '10px 20px',
+                        cursor: 'pointer',
+                    }}
+                >
+                    Fetch Data
+                </button>
             </div>
 
             {chartData && (
@@ -214,10 +244,19 @@ const SpawnChanceGraph = () => {
                             plugins: {
                                 legend: {
                                     position: 'top',
+                                    labels: {
+                                        color: '#FFFFFF', // Legend text color
+                                    },
                                 },
                                 title: {
                                     display: true,
                                     text: 'Spawn Chances Over Time',
+                                    color: '#FFFFFF', // Title text color
+                                },
+                                tooltip: {
+                                    titleColor: '#FFFFFF',
+                                    bodyColor: '#FFFFFF',
+                                    backgroundColor: '#333333',
                                 },
                             },
                             scales: {
@@ -235,15 +274,23 @@ const SpawnChanceGraph = () => {
                                     title: {
                                         display: true,
                                         text: 'Timestamp',
+                                        color: '#FFFFFF', // X-axis title color
+                                    },
+                                    ticks: {
+                                        color: '#FFFFFF', // X-axis labels color
                                     },
                                 },
                                 y: {
                                     title: {
                                         display: true,
                                         text: 'Spawn Chance (%)',
+                                        color: '#FFFFFF', // Y-axis title color
                                     },
                                     min: 0,
                                     max: capPercentage ? 100 : 10000, // Set max to 100 if cap is checked, otherwise 10000
+                                    ticks: {
+                                        color: '#FFFFFF', // Y-axis labels color
+                                    },
                                 },
                             },
                         }}
