@@ -243,6 +243,7 @@ const SpawnChanceGraph = () => {
                                         text: 'Spawn Chance (%)',
                                     },
                                     min: 0,
+                                    max: capPercentage ? 100 : 10000, // Set max to 100 if cap is checked, otherwise 10000
                                 },
                             },
                         }}
