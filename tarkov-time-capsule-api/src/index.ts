@@ -202,8 +202,14 @@ export async function handleSpawnChanceRequest(request: Request, d1: D1Database)
 	}
 
 	return new Response(JSON.stringify(groupedResults), {
-		headers: { 'Content-Type': 'application/json' },
+		headers: {
+			'Content-Type': 'application/json',
+			'Access-Control-Allow-Origin': '*', // Allow requests from any origin (for development purposes)
+			'Access-Control-Allow-Methods': 'GET, OPTIONS', // Allow specific methods
+			'Access-Control-Allow-Headers': 'Content-Type',
+		},
 	});
+
 }
 
 export default {
