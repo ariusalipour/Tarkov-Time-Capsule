@@ -37,62 +37,73 @@ const SpawnChanceGraph = () => {
     const formatDate = (date) => date.toISOString().split('T')[0];
 
     // State variables
-    //const [data, setData] = useState(null);
     const [mapName, setMapName] = useState('');
     const [bossName, setBossName] = useState('');
     const [startDate, setStartDate] = useState(formatDate(defaultStartDate)); // Default to one week prior
     const [endDate, setEndDate] = useState(formatDate(defaultEndDate)); // Default to tomorrow
     const [chartData, setChartData] = useState(null);
+    const [capPercentage, setCapPercentage] = useState(false); // State for checkbox to cap values at 100%
 
     // Prepare the data for the chart
-    const prepareChartData = useCallback((apiData) => {
-        if (!apiData) {
-            return;
-        }
-
-        // Determine how to group the data
-        const shouldGroupByBoss = mapName !== '' || (mapName !== '' && bossName !== '');
-        const shouldGroupByMap = bossName !== '' && mapName === '';
-        const shouldGroupByBoth = mapName === '' && bossName === '';
-
-        // Create a dataset based on the grouping preference
-        const groupedData = {};
-
-        apiData.forEach((item) => {
-            let groupKey = '';
-
-            if (shouldGroupByBoss) {
-                groupKey = item.BossName;
-            } else if (shouldGroupByMap) {
-                groupKey = item.MapName;
-            } else if (shouldGroupByBoth) {
-                groupKey = `${item.MapName} - ${item.BossName}`;
+    const prepareChartData = useCallback(
+        (apiData) => {
+            if (!apiData) {
+                return;
             }
 
-            if (!groupedData[groupKey]) {
-                groupedData[groupKey] = {
-                    label: groupKey,
-                    data: [],
-                    backgroundColor: `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(
-                        Math.random() * 255
-                    )}, ${Math.floor(Math.random() * 255)}, 0.5)`,
-                    borderColor: `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(
-                        Math.random() * 255
-                    )}, ${Math.floor(Math.random() * 255)}, 1)`,
-                    fill: false,
-                };
-            }
+            // Determine how to group the data
+            const shouldGroupByBoss = mapName !== '' || (mapName !== '' && bossName !== '');
+            const shouldGroupByMap = bossName !== '' && mapName === '';
+            const shouldGroupByBoth = mapName === '' && bossName === '';
 
-            groupedData[groupKey].data.push({
-                x: new Date(item.Timestamp), // X-axis is the timestamp
-                y: item.Chance, // Y-axis is the spawn chance
+            // Create a dataset based on the grouping preference
+            const groupedData = {};
+
+            apiData.forEach((item) => {
+                let groupKey = '';
+
+                if (shouldGroupByBoss) {
+                    groupKey = item.BossName;
+                } else if (shouldGroupByMap) {
+                    groupKey = item.MapName;
+                } else if (shouldGroupByBoth) {
+                    groupKey = `${item.MapName} - ${item.BossName}`;
+                }
+
+                if (!groupedData[groupKey]) {
+                    groupedData[groupKey] = {
+                        label: groupKey,
+                        data: [],
+                        backgroundColor: `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(
+                            Math.random() * 255
+                        )}, ${Math.floor(Math.random() * 255)}, 0.5)`,
+                        borderColor: `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(
+                            Math.random() * 255
+                        )}, ${Math.floor(Math.random() * 255)}, 1)`,
+                        fill: false,
+                    };
+                }
+
+                // Convert spawn chance to percentage
+                let spawnChancePercentage = item.Chance * 100;
+
+                // Cap values at 100 if the checkbox is checked
+                if (capPercentage && spawnChancePercentage > 100) {
+                    spawnChancePercentage = 100;
+                }
+
+                groupedData[groupKey].data.push({
+                    x: new Date(item.Timestamp), // X-axis is the timestamp
+                    y: spawnChancePercentage, // Y-axis is the spawn chance in percentage
+                });
             });
-        });
 
-        setChartData({
-            datasets: Object.values(groupedData),
-        });
-    }, [mapName, bossName]); // Add dependencies for mapName and bossName
+            setChartData({
+                datasets: Object.values(groupedData),
+            });
+        },
+        [mapName, bossName, capPercentage] // Add dependencies for mapName, bossName, and capPercentage
+    );
 
     // UseCallback for fetchData
     const fetchData = useCallback(async () => {
@@ -124,7 +135,7 @@ const SpawnChanceGraph = () => {
     const bossOptions = [
         'Infected Tagilla',
         'Infected',
-        'assault',
+        'Assault',
         'Knight',
         'Reshala',
         'Shturman',
@@ -181,6 +192,16 @@ const SpawnChanceGraph = () => {
                     End Date:
                     <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                 </label>
+                <div>
+                    <label>
+                        Cap Spawn Chance at 100%:
+                        <input
+                            type="checkbox"
+                            checked={capPercentage}
+                            onChange={(e) => setCapPercentage(e.target.checked)}
+                        />
+                    </label>
+                </div>
                 <button onClick={fetchData}>Fetch Data</button>
             </div>
 
