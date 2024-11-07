@@ -111,11 +111,18 @@ async function updateDatabase(d1: D1Database) {
 
 export async function handleSpawnChanceRequest(request: Request, d1: D1Database): Promise<Response> {
 	const url = new URL(request.url);
-	const mapName = url.searchParams.get('mapName');
-	const bossName = url.searchParams.get('bossName');
-	const startDateParam = url.searchParams.get('startDate');
-	const endDateParam = url.searchParams.get('endDate');
-	const groupBy = url.searchParams.get('groupBy'); // Parameter to control grouping
+
+	// Convert search parameters to a Map with lowercase keys for case-insensitive access
+	const params = new Map<string, string>();
+	url.searchParams.forEach((value, key) => {
+		params.set(key.toLowerCase(), value);
+	});
+
+	const mapName = params.get('mapname');
+	const bossName = params.get('bossname');
+	const startDateParam = params.get('startdate');
+	const endDateParam = params.get('enddate');
+	const groupBy = params.get('groupby'); // Parameter to control grouping
 
 	// Step 1: Determine date range
 	const now = Date.now() / 1000; // Current time in Unix epoch seconds
@@ -136,14 +143,14 @@ export async function handleSpawnChanceRequest(request: Request, d1: D1Database)
 	`;
 	const bindings = [startDate, endDate];
 
-	// Append conditions based on parameter presence
+	// Append conditions based on parameter presence, using LOWER() for case-insensitive matching
 	if (mapName) {
-		query += ' AND Maps.MapName = ?';
+		query += ' AND LOWER(Maps.MapName) = LOWER(?)';
 		bindings.push(mapName);
 	}
 
 	if (bossName) {
-		query += ' AND Bosses.BossName = ?';
+		query += ' AND LOWER(Bosses.BossName) = LOWER(?)';
 		bindings.push(bossName);
 	}
 
@@ -222,7 +229,6 @@ export async function handleSpawnChanceRequest(request: Request, d1: D1Database)
 		headers: { 'Content-Type': 'application/json' },
 	});
 }
-
 
 export default {
 	// Scheduled function to update database on a cron schedule
