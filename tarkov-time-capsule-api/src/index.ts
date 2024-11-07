@@ -5,7 +5,6 @@ export interface Env {
 	DB: D1Database;
 }
 
-// Define GraphQL query to fetch boss spawn data from Tarkov API
 const graphqlQuery = `
 {
   maps {
@@ -29,10 +28,8 @@ interface Map {
 }
 
 async function processAndInsertData(data: { maps: Map[] }, d1: D1Database) {
-	// Step 1: Generate a single timestamp for this response
-	const currentTimestamp = Date.now() / 1000; // Unix epoch time in seconds
+	const currentTimestamp = Date.now() / 1000;
 
-	// Step 2: Insert or retrieve the timestamp
 	let timestampId: number;
 	const existingTimestamp = await d1.prepare('SELECT TimestampID FROM Timestamps WHERE Timestamp = ?')
 		.bind(currentTimestamp)
@@ -47,9 +44,7 @@ async function processAndInsertData(data: { maps: Map[] }, d1: D1Database) {
 		timestampId = timestampResult.meta.last_row_id;
 	}
 
-	// Step 3: Process each map and boss, using the same TimestampID for all records
 	for (const map of data.maps) {
-		// Check if the map exists in the database
 		let mapId: number;
 		const existingMap = await d1.prepare('SELECT MapID FROM Maps WHERE MapName = ?')
 			.bind(map.name)
@@ -58,7 +53,6 @@ async function processAndInsertData(data: { maps: Map[] }, d1: D1Database) {
 		if (existingMap) {
 			mapId = <number>existingMap.MapID;
 		} else {
-			// Insert the map if it doesn't exist
 			const mapResult = await d1.prepare('INSERT INTO Maps (MapName) VALUES (?)')
 				.bind(map.name)
 				.run();
@@ -66,7 +60,6 @@ async function processAndInsertData(data: { maps: Map[] }, d1: D1Database) {
 		}
 
 		for (const boss of map.bosses) {
-			// Check if the boss exists in the database
 			let bossId: number;
 			const existingBoss = await d1.prepare('SELECT BossID FROM Bosses WHERE BossName = ?')
 				.bind(boss.name)
@@ -75,14 +68,12 @@ async function processAndInsertData(data: { maps: Map[] }, d1: D1Database) {
 			if (existingBoss) {
 				bossId = <number>existingBoss.BossID;
 			} else {
-				// Insert the boss if it doesn't exist
 				const bossResult = await d1.prepare('INSERT INTO Bosses (BossName) VALUES (?)')
 					.bind(boss.name)
 					.run();
 				bossId = bossResult.meta.last_row_id;
 			}
 
-			// Insert spawn chance with the shared TimestampID
 			await d1.prepare(
 				'INSERT OR IGNORE INTO SpawnChances (BossID, MapID, Chance, TimestampID) VALUES (?, ?, ?, ?)'
 			)
@@ -92,7 +83,6 @@ async function processAndInsertData(data: { maps: Map[] }, d1: D1Database) {
 	}
 }
 
-// Function to update D1 database with data from GraphQL API
 async function updateDatabase(d1: D1Database) {
 	try {
 		let response = {};
@@ -100,7 +90,6 @@ async function updateDatabase(d1: D1Database) {
 
 		const maps = response.maps;
 
-		// Process and insert data into D1 database
 		await processAndInsertData({ maps }, d1);
 
 		console.log('D1 database updated successfully');
@@ -112,7 +101,6 @@ async function updateDatabase(d1: D1Database) {
 export async function handleSpawnChanceRequest(request: Request, d1: D1Database): Promise<Response> {
 	const url = new URL(request.url);
 
-	// Convert search parameters to a Map with lowercase keys for case-insensitive access
 	const params = new Map<string, string>();
 	url.searchParams.forEach((value, key) => {
 		params.set(key.toLowerCase(), value);
@@ -122,17 +110,14 @@ export async function handleSpawnChanceRequest(request: Request, d1: D1Database)
 	const bossName = params.get('bossname');
 	const startDateParam = params.get('startdate');
 	const endDateParam = params.get('enddate');
-	const groupBy = params.get('groupby'); // Parameter to control grouping
+	const groupBy = params.get('groupby');
 
-	// Step 1: Determine date range
-	const now = Date.now() / 1000; // Current time in Unix epoch seconds
-	const oneWeekAgo = now - 7 * 24 * 60 * 60; // Timestamp for one week ago
+	const now = Date.now() / 1000;
+	const oneWeekAgo = now - 7 * 24 * 60 * 60;
 
-	// Convert start and end dates to Unix timestamps, or use defaults
 	const startDate = startDateParam ? new Date(startDateParam).getTime() / 1000 : oneWeekAgo;
 	const endDate = endDateParam ? new Date(endDateParam).getTime() / 1000 : now;
 
-	// Step 2: Build SQL query and bindings array dynamically
 	let query = `
 		SELECT Maps.MapName, Bosses.BossName, SpawnChances.Chance, Timestamps.Timestamp
 		FROM SpawnChances
@@ -143,7 +128,6 @@ export async function handleSpawnChanceRequest(request: Request, d1: D1Database)
 	`;
 	const bindings = [startDate, endDate];
 
-	// Append conditions based on parameter presence, using LOWER() for case-insensitive matching
 	if (mapName) {
 		query += ' AND LOWER(Maps.MapName) = LOWER(?)';
 		bindings.push(mapName);
@@ -154,19 +138,15 @@ export async function handleSpawnChanceRequest(request: Request, d1: D1Database)
 		bindings.push(bossName);
 	}
 
-	// Step 3: Execute the query
 	const results = await d1.prepare(query).bind(...bindings).all();
 
-	// Step 4: Convert Unix timestamps to ISO date-time strings
 	for (const row of results.results) {
-		row.Timestamp = new Date(row.Timestamp * 1000).toISOString(); // Convert seconds to milliseconds and format
+		row.Timestamp = new Date(row.Timestamp * 1000).toISOString();
 	}
 
-	// Step 5: Group the results based on the groupBy parameter, if specified
 	let groupedResults;
 
 	if (groupBy === 'boss') {
-		// Group by boss
 		groupedResults = results.results.reduce((acc, row) => {
 			if (!acc[row.BossName]) {
 				acc[row.BossName] = {
@@ -181,10 +161,9 @@ export async function handleSpawnChanceRequest(request: Request, d1: D1Database)
 			});
 			return acc;
 		}, {});
-		groupedResults = Object.values(groupedResults); // Convert to array format
+		groupedResults = Object.values(groupedResults);
 
 	} else if (groupBy === 'map') {
-		// Group by map
 		groupedResults = results.results.reduce((acc, row) => {
 			if (!acc[row.MapName]) {
 				acc[row.MapName] = {
@@ -199,10 +178,9 @@ export async function handleSpawnChanceRequest(request: Request, d1: D1Database)
 			});
 			return acc;
 		}, {});
-		groupedResults = Object.values(groupedResults); // Convert to array format
+		groupedResults = Object.values(groupedResults);
 
 	} else if (groupBy === 'timestamp') {
-		// Group by timestamp
 		groupedResults = results.results.reduce((acc, row) => {
 			if (!acc[row.Timestamp]) {
 				acc[row.Timestamp] = {
@@ -217,26 +195,22 @@ export async function handleSpawnChanceRequest(request: Request, d1: D1Database)
 			});
 			return acc;
 		}, {});
-		groupedResults = Object.values(groupedResults); // Convert to array format
+		groupedResults = Object.values(groupedResults);
 
 	} else {
-		// Default flat response if no grouping is specified
 		groupedResults = results.results;
 	}
 
-	// Step 6: Return the grouped results as JSON
 	return new Response(JSON.stringify(groupedResults), {
 		headers: { 'Content-Type': 'application/json' },
 	});
 }
 
 export default {
-	// Scheduled function to update database on a cron schedule
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
 		await updateDatabase(env.DB);
 	},
 
-	// Fetch request handler
 	async fetch(request: Request, env: Env): Promise<Response> {
 		const { pathname } = new URL(request.url);
 
@@ -244,7 +218,6 @@ export default {
 			return await handleSpawnChanceRequest(request, env.DB);
 		}
 
-		// Default response with usage instructions for the /api/spawnchance endpoint
 		return new Response(
 			`Welcome to the Tarkov Time Capsule API!
 
