@@ -43,6 +43,7 @@ const SpawnChanceGraph = () => {
     const [endDate, setEndDate] = useState(formatDate(defaultEndDate)); // Default to tomorrow
     const [chartData, setChartData] = useState(null);
     const [maxYAxisValue, setMaxYAxisValue] = useState(10000); // State for dropdown to control max Y-axis value
+    const [capPercentage, setCapPercentage] = useState(false); // State for checkbox to cap values at 100%
 
     // Prepare the data for the chart
     const prepareChartData = useCallback(
@@ -87,6 +88,11 @@ const SpawnChanceGraph = () => {
                 // Convert spawn chance to percentage
                 let spawnChancePercentage = item.Chance * 100;
 
+                // Cap values at 100 if the checkbox is checked
+                if (capPercentage && spawnChancePercentage > 100) {
+                    spawnChancePercentage = 100;
+                }
+
                 groupedData[groupKey].data.push({
                     x: new Date(item.Timestamp), // X-axis is the timestamp
                     y: spawnChancePercentage, // Y-axis is the spawn chance in percentage
@@ -97,7 +103,7 @@ const SpawnChanceGraph = () => {
                 datasets: Object.values(groupedData),
             });
         },
-        [mapName, bossName] // Add dependencies for mapName and bossName
+        [mapName, bossName, capPercentage] // Add dependencies for mapName, bossName, and capPercentage
     );
 
     // UseCallback for fetchData
@@ -208,32 +214,49 @@ const SpawnChanceGraph = () => {
                         style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
                     />
                 </label>
-                <label style={{ marginRight: '15px', marginTop: '15px' }}>
-                    Y-Axis Max Value:
-                    <select
-                        value={maxYAxisValue}
-                        onChange={(e) => setMaxYAxisValue(parseInt(e.target.value))}
-                        style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
-                    >
-                        {yAxisOptions.map((value, index) => (
-                            <option key={index} value={value}>
-                                {value}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                {/*<button*/}
-                {/*    onClick={fetchData}*/}
-                {/*    style={{*/}
-                {/*        backgroundColor: '#444444',*/}
-                {/*        color: '#FFFFFF',*/}
-                {/*        border: 'none',*/}
-                {/*        padding: '10px 20px',*/}
-                {/*        cursor: 'pointer',*/}
-                {/*    }}*/}
-                {/*>*/}
-                {/*    Fetch Data*/}
-                {/*</button>*/}
+                <div style={{ marginBottom: '15px', marginTop: '15px' }}>
+                    <label style={{ marginRight: '15px' }}>
+                        Cap Spawn Chance at 100%:
+                        <input
+                            type="checkbox"
+                            checked={capPercentage}
+                            onChange={(e) => {
+                                setCapPercentage(e.target.checked);
+                                if (e.target.checked && maxYAxisValue > 100) {
+                                    setMaxYAxisValue(100); // If capped, reset max value to 100
+                                }
+                            }}
+                            style={{ marginLeft: '10px' }}
+                        />
+                    </label>
+                    <label style={{ marginRight: '15px' }}>
+                        Y-Axis Max Value:
+                        <select
+                            value={maxYAxisValue}
+                            onChange={(e) => setMaxYAxisValue(parseInt(e.target.value))}
+                            style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
+                            disabled={capPercentage} // Disable dropdown if capPercentage is checked
+                        >
+                            {yAxisOptions.map((value, index) => (
+                                <option key={index} value={value}>
+                                    {value}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                </div>
+                <button
+                    onClick={fetchData}
+                    style={{
+                        backgroundColor: '#444444',
+                        color: '#FFFFFF',
+                        border: 'none',
+                        padding: '10px 20px',
+                        cursor: 'pointer',
+                    }}
+                >
+                    Fetch Data
+                </button>
             </div>
 
             {chartData && (
@@ -288,7 +311,7 @@ const SpawnChanceGraph = () => {
                                         color: '#FFFFFF', // Y-axis title color
                                     },
                                     min: 0,
-                                    max: maxYAxisValue, // Set max value based on dropdown selection
+                                    max: capPercentage ? 100 : maxYAxisValue, // Set max to 100 if cap is checked, otherwise use maxYAxisValue
                                     ticks: {
                                         color: '#FFFFFF', // Y-axis labels color
                                     },
