@@ -42,7 +42,7 @@ const SpawnChanceGraph = () => {
     const [startDate, setStartDate] = useState(formatDate(defaultStartDate)); // Default to one week prior
     const [endDate, setEndDate] = useState(formatDate(defaultEndDate)); // Default to tomorrow
     const [chartData, setChartData] = useState(null);
-    const [capPercentage, setCapPercentage] = useState(false); // State for checkbox to cap values at 100%
+    const [maxYAxisValue, setMaxYAxisValue] = useState(10000); // State for dropdown to control max Y-axis value
 
     // Prepare the data for the chart
     const prepareChartData = useCallback(
@@ -87,11 +87,6 @@ const SpawnChanceGraph = () => {
                 // Convert spawn chance to percentage
                 let spawnChancePercentage = item.Chance * 100;
 
-                // Cap values at 100 if the checkbox is checked
-                if (capPercentage && spawnChancePercentage > 100) {
-                    spawnChancePercentage = 100;
-                }
-
                 groupedData[groupKey].data.push({
                     x: new Date(item.Timestamp), // X-axis is the timestamp
                     y: spawnChancePercentage, // Y-axis is the spawn chance in percentage
@@ -102,7 +97,7 @@ const SpawnChanceGraph = () => {
                 datasets: Object.values(groupedData),
             });
         },
-        [mapName, bossName, capPercentage] // Add dependencies for mapName, bossName, and capPercentage
+        [mapName, bossName] // Add dependencies for mapName and bossName
     );
 
     // UseCallback for fetchData
@@ -158,6 +153,9 @@ const SpawnChanceGraph = () => {
         'The Lab',
     ];
 
+    // Y-axis max value options
+    const yAxisOptions = [10000, 1000, 100, 80, 60, 40, 20];
+
     return (
         <div style={{ backgroundColor: '#121212', color: '#FFFFFF', minHeight: '100vh', padding: '20px' }}>
             <h1>Tarkov Spawn Chance Data</h1>
@@ -210,29 +208,32 @@ const SpawnChanceGraph = () => {
                         style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
                     />
                 </label>
-                <div style={{ marginBottom: '15px', marginTop: '15px' }}>
-                    <label>
-                        Cap Spawn Chance at 100%:
-                        <input
-                            type="checkbox"
-                            checked={capPercentage}
-                            onChange={(e) => setCapPercentage(e.target.checked)}
-                            style={{ marginLeft: '10px' }}
-                        />
-                    </label>
-                </div>
-                <button
-                    onClick={fetchData}
-                    style={{
-                        backgroundColor: '#444444',
-                        color: '#FFFFFF',
-                        border: 'none',
-                        padding: '10px 20px',
-                        cursor: 'pointer',
-                    }}
-                >
-                    Fetch Data
-                </button>
+                <label style={{ marginRight: '15px', marginTop: '15px' }}>
+                    Y-Axis Max Value:
+                    <select
+                        value={maxYAxisValue}
+                        onChange={(e) => setMaxYAxisValue(parseInt(e.target.value))}
+                        style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
+                    >
+                        {yAxisOptions.map((value, index) => (
+                            <option key={index} value={value}>
+                                {value}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                {/*<button*/}
+                {/*    onClick={fetchData}*/}
+                {/*    style={{*/}
+                {/*        backgroundColor: '#444444',*/}
+                {/*        color: '#FFFFFF',*/}
+                {/*        border: 'none',*/}
+                {/*        padding: '10px 20px',*/}
+                {/*        cursor: 'pointer',*/}
+                {/*    }}*/}
+                {/*>*/}
+                {/*    Fetch Data*/}
+                {/*</button>*/}
             </div>
 
             {chartData && (
@@ -287,7 +288,7 @@ const SpawnChanceGraph = () => {
                                         color: '#FFFFFF', // Y-axis title color
                                     },
                                     min: 0,
-                                    max: capPercentage ? 100 : 10000, // Set max to 100 if cap is checked, otherwise 10000
+                                    max: maxYAxisValue, // Set max value based on dropdown selection
                                     ticks: {
                                         color: '#FFFFFF', // Y-axis labels color
                                     },
