@@ -223,7 +223,7 @@ const SpawnChanceGraph = () => {
                             onChange={(e) => {
                                 setCapPercentage(e.target.checked);
                                 if (e.target.checked && maxYAxisValue > 100) {
-                                    setMaxYAxisValue(100); // If capped, reset max value to 100
+                                    setMaxYAxisValue(100); // If capped, reset max value to 100 if it's over 100
                                 }
                             }}
                             style={{ marginLeft: '10px' }}
@@ -235,13 +235,15 @@ const SpawnChanceGraph = () => {
                             value={maxYAxisValue}
                             onChange={(e) => setMaxYAxisValue(parseInt(e.target.value))}
                             style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
-                            disabled={capPercentage} // Disable dropdown if capPercentage is checked
+                            disabled={capPercentage && maxYAxisValue > 100} // Disable selecting values > 100 if cap is checked
                         >
-                            {yAxisOptions.map((value, index) => (
-                                <option key={index} value={value}>
-                                    {value}
-                                </option>
-                            ))}
+                            {yAxisOptions
+                                .filter((value) => !capPercentage || value <= 100) // Filter out values greater than 100 if cap is checked
+                                .map((value, index) => (
+                                    <option key={index} value={value}>
+                                        {value}
+                                    </option>
+                                ))}
                         </select>
                     </label>
                 </div>
@@ -311,7 +313,7 @@ const SpawnChanceGraph = () => {
                                         color: '#FFFFFF', // Y-axis title color
                                     },
                                     min: 0,
-                                    max: capPercentage ? 100 : maxYAxisValue, // Set max to 100 if cap is checked, otherwise use maxYAxisValue
+                                    max: capPercentage && maxYAxisValue > 100 ? 100 : maxYAxisValue, // Set max to 100 if cap is checked, otherwise use maxYAxisValue
                                     ticks: {
                                         color: '#FFFFFF', // Y-axis labels color
                                     },
