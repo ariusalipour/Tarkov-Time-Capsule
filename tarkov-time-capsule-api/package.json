@@ -14,6 +14,7 @@
     "wrangler": "^3.60.3"
   },
   "dependencies": {
+    "graphql": "^16.9.0",
     "graphql-request": "^7.1.2"
   }
 }

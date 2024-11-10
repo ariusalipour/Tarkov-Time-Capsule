@@ -1,0 +1,47 @@
+﻿# schema.graphql
+type Map {
+	id: ID!
+	name: String!
+}
+
+type Boss {
+	id: ID!
+	name: String!
+}
+
+type Timestamp {
+	id: ID!
+	timestamp: String!
+}
+
+type SpawnChance {
+	id: ID!
+	map: Map!
+	boss: Boss!
+	chance: Float!
+	timestamp: Timestamp!
+}
+
+# Root Query Types
+type Query {
+	Timestamps(startDate: String, endDate: String): [TimestampGroup]
+	Maps(mapName: String, startDate: String, endDate: String): [MapGroup]
+	Bosses(bossName: String, startDate: String, endDate: String): [BossGroup]
+	SpawnChances(mapName: String, bossName: String, startDate: String, endDate: String): [SpawnChance]
+}
+
+# Grouped Query Result Types
+type TimestampGroup {
+	timestamp: String!
+	spawnChances: [SpawnChance!]!
+}
+
+type MapGroup {
+	map: Map!
+	spawnChances: [SpawnChance!]!
+}
+
+type BossGroup {
+	boss: Boss!
+	spawnChances: [SpawnChance!]!
+}
