@@ -27,11 +27,24 @@ export const bossHandler: InteractionHandler = async (
 	try {
 		// Fetch data from your API
 		const response = await fetch(`${env.REACT_APP_API_URL}api/spawnchance?bossName=${encodeURIComponent(bossName)}`);
-		const spawnRates: { MapName: string; Chance: number }[] = await response.json();
+		const spawnRates: { MapName: string; Chance: number; Date: string }[] = await response.json();
+
+		// Create a map to store the latest spawn rate for each map
+		const latestSpawnRates = new Map<string, { MapName: string; Chance: number; Date: string }>();
+
+		spawnRates.forEach((rate) => {
+			const existingRate = latestSpawnRates.get(rate.MapName);
+			if (!existingRate || new Date(rate.Date) > new Date(existingRate.Date)) {
+				latestSpawnRates.set(rate.MapName, rate);
+			}
+		});
+
+		// Convert the map back to an array
+		const latestSpawnRatesArray = Array.from(latestSpawnRates.values());
 
 		// Format the spawn rates into a readable message
-		const spawnRateMessage = spawnRates
-			.map((rate: { MapName: string; Chance: number }) => `${rate.MapName}: ${rate.Chance * 100}%`)
+		const spawnRateMessage = latestSpawnRatesArray
+			.map((rate) => `${rate.MapName}: ${rate.Chance * 100}%`)
 			.join("\n");
 
 		return {
