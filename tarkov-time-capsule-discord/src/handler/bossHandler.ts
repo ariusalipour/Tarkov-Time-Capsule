@@ -6,6 +6,13 @@
 } from "@glenstack/cf-workers-discord-bot";
 import { env } from "../environments";
 
+interface SpawnRate {
+	BossName: string;
+	MapName: string;
+	Chance: number;
+	Timestamp: string;
+}
+
 export const bossHandler: InteractionHandler = async (
 	interaction: Interaction
 ): Promise<InteractionResponse> => {
@@ -31,7 +38,7 @@ export const bossHandler: InteractionHandler = async (
 
 		// Fetch data from your API with date range
 		const response = await fetch(`${env.REACT_APP_API_URL}api/spawnchance?bossName=${encodeURIComponent(bossName)}&startDate=${startDate}&endDate=${endDate}`);
-		const spawnRates: { MapName: string; Chance: number; Timestamp: string }[] = await response.json();
+		const spawnRates: SpawnRate[] = await response.json();
 
 		if (spawnRates.length === 0) {
 			return {
@@ -46,7 +53,7 @@ export const bossHandler: InteractionHandler = async (
 		}
 
 		// Create a map to store the latest spawn rate for each map
-		const latestSpawnRates = new Map<string, { MapName: string; Chance: number; Timestamp: string }>();
+		const latestSpawnRates = new Map<string, SpawnRate>();
 
 		spawnRates.forEach((rate) => {
 			const existingRate = latestSpawnRates.get(rate.MapName);
