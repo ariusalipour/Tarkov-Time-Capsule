@@ -84,7 +84,7 @@ export const helloHandler: InteractionHandler = async (
 	interaction: Interaction
 ): Promise<InteractionResponse> => {
 	const userID = interaction.member.user.id;
-	const useSpecialGreeting = specialGreetings[userID] && Math.random() < 0.5;
+	const useSpecialGreeting = specialGreetings[userID] && Math.random() < 0.2;
 	const randomGreeting = useSpecialGreeting ? specialGreetings[userID] : greetings[Math.floor(Math.random() * greetings.length)](userID);
 
 	return {
