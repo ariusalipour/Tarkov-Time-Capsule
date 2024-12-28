@@ -41,13 +41,13 @@ export const bossHandler: InteractionHandler = async (
 			};
 		}
 
-		// Create a map to store the latest and previous spawn rates for each map
-		const latestSpawnRates = new Map<string, { latest: { MapName: string; Chance: number; Date: string; Change?: number }, previous?: { MapName: string; Chance: number; Date: string; Change?: number } }>();
+		// Create a map to store the latest spawn rate for each map
+		const latestSpawnRates = new Map<string, { MapName: string; Chance: number; Date: string; Change?: number }>();
 
 		spawnRates.forEach((rate) => {
 			const existingRate = latestSpawnRates.get(rate.MapName);
-			if (!existingRate || new Date(rate.Date) > new Date(existingRate.latest.Date)) {
-				latestSpawnRates.set(rate.MapName, { latest: rate, previous: existingRate?.latest });
+			if (!existingRate || new Date(rate.Date) > new Date(existingRate.Date)) {
+				latestSpawnRates.set(rate.MapName, rate);
 			}
 		});
 
@@ -56,11 +56,7 @@ export const bossHandler: InteractionHandler = async (
 
 		// Format the spawn rates into a readable message
 		const spawnRateMessage = latestSpawnRatesArray
-			.map((rate) => {
-				const latestRateText = `${rate.latest.MapName}: ${rate.latest.Chance * 100}%`;
-				const previousRateText = rate.previous ? ` (${rate.previous.Chance * 100}% | ${new Date(rate.previous.Date).toLocaleString()})` : '';
-				return `${latestRateText}${previousRateText}`;
-			})
+			.map((rate) => `${rate.MapName}: ${rate.Chance * 100}% (${new Date(rate.Date).toLocaleString()})`)
 			.join("\n");
 
 		return {
