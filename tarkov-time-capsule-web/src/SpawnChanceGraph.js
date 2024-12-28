@@ -274,10 +274,9 @@ const SpawnChanceGraph = () => {
                                 x: {
                                     type: 'time', // Time scale for the x-axis
                                     time: {
-                                        unit: 'minute', // Adjust the unit to display timestamps in detail
+                                        unit: dateRange > 3 ? 'day' : 'hour', // Adjust the unit to display timestamps in detail
                                         tooltipFormat: 'yyyy-MM-dd HH:mm:ss', // Display full timestamp in tooltip
                                         displayFormats: {
-                                            minute: 'HH:mm', // Display format for each tick
                                             hour: 'HH:mm', // Display format for hours
                                             day: 'MMM dd', // Display format for days
                                         },
