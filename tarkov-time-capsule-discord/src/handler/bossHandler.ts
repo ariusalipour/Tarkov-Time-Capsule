@@ -56,10 +56,7 @@ export const bossHandler: InteractionHandler = async (
 
 		// Format the spawn rates into a readable message
 		const spawnRateMessage = latestSpawnRatesArray
-			.map((rate) => {
-				const changeText = rate.Change !== undefined ? ` (Change: ${rate.Change * 100}%)` : '';
-				return `${rate.MapName}: ${rate.Chance * 100}%${changeText}`;
-			})
+			.map((rate) => `${rate.MapName}: ${rate.Chance * 100}%`)
 			.join("\n");
 
 		return {
