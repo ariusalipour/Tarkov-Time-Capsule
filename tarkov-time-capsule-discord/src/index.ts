@@ -17,9 +17,9 @@ const setupBot = async () => {
 		applicationSecret: env.APPLICATION_SECRET,
 		publicKey: "cb2c904a8b7da1ac15b97f7168f21091d76710fc87115ffabe4d143c2c9cc74a",
 		commands: [
+			[ pingCommand, pingHandler ],
 			[ helloCommand, helloHandler ],
-			[ bossCommand, bossHandler ],
-			[ pingCommand, pingHandler ]
+			[ bossCommand, bossHandler ]
 		],
 	});
 };
