@@ -3,8 +3,8 @@ import {
 } from "@glenstack/cf-workers-discord-bot";
 import { bossHandler } from "./handler/bossHandler";
 import { createBossCommand } from "./command/bossCommand";
-import {helloHandler} from "./handler/helloHandler";
-import {helloCommand} from "./command/helloCommand";
+import { helloHandler } from "./handler/helloHandler";
+import { helloCommand } from "./command/helloCommand";
 import { env } from "./environments";
 
 const setupBot = async () => {
