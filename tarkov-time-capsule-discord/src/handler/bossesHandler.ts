@@ -19,22 +19,6 @@ export const bossesHandler: InteractionHandler = async (
 	const userID = interaction.member.user.id;
 
 	try {
-		// Fetch the list of all bosses
-		const bossesResponse = await fetch(`${env.REACT_APP_API_URL}api/bosses`);
-		const bosses: string[] = await bossesResponse.json();
-
-		if (bosses.length === 0) {
-			return {
-				type: InteractionResponseType.ChannelMessageWithSource,
-				data: {
-					content: `No bosses found.`,
-					allowed_mentions: {
-						users: [userID],
-					},
-				},
-			};
-		}
-
 		// Define the date range (last day)
 		const endDate = new Date().toISOString().split('T')[0];
 		const startDate = new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0];
