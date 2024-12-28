@@ -53,18 +53,16 @@ export const bossesHandler: InteractionHandler = async (
 			latestSpawnRates.set(bossName, bossMap);
 		});
 
-		// Format the data into a readable table
-		const tableHeader = `| Boss | Map | Spawn Rate |\n| --- | --- | --- |\n`;
-		const tableRows = Array.from(latestSpawnRates.entries()).flatMap(([bossName, mapRates]) =>
-			Array.from(mapRates.values()).map(rate => `| ${bossName} | ${rate.MapName} | ${rate.Chance * 100}% |`)
-		).join("\n");
-
-		const table = tableHeader + tableRows;
+		// Format the data into a readable message
+		const spawnRateMessage = Array.from(latestSpawnRates.entries()).map(([bossName, mapRates]) => {
+			const mapRatesMessage = Array.from(mapRates.values()).map(rate => `- ${rate.MapName}: ${rate.Chance * 100}%`).join("\n");
+			return `**${bossName}**\n${mapRatesMessage}`;
+		}).join("\n\n");
 
 		return {
 			type: InteractionResponseType.ChannelMessageWithSource,
 			data: {
-				content: `Spawn rates for all bosses:\n${table}`,
+				content: `Spawn rates for all bosses:\n${spawnRateMessage}`,
 				allowed_mentions: {
 					users: [userID],
 				},
