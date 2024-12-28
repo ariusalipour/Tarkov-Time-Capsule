@@ -241,18 +241,6 @@ const SpawnChanceGraph = () => {
                         </select>
                     </label>
                 </div>
-                <button
-                    onClick={fetchData}
-                    style={{
-                        backgroundColor: '#444444',
-                        color: '#FFFFFF',
-                        border: 'none',
-                        padding: '10px 20px',
-                        cursor: 'pointer',
-                    }}
-                >
-                    Fetch Data
-                </button>
             </div>
 
             {chartData && (
