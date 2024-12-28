@@ -7,10 +7,12 @@
 export const pingHandler: InteractionHandler = async (
 ): Promise<InteractionResponse> => {
 
+	const currentDateTime = new Date().toLocaleString();
+
 	return {
 		type: InteractionResponseType.ChannelMessageWithSource,
 		data: {
-			content: `Tarkov Time Capsule Discord is Live!`,
+			content: `${currentDateTime} || Tarkov Time Capsule Discord is Live!`,
 		},
 	};
 };
