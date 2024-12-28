@@ -147,6 +147,15 @@ const SpawnChanceGraph = () => {
         fetchData();
     }, [fetchData]);
 
+    const calculateDateRange = (start, end) => {
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+        const timeDiff = Math.abs(endDate - startDate);
+        return Math.ceil(timeDiff / (1000 * 3600 * 24)); // Convert milliseconds to days
+    };
+
+    const dateRange = calculateDateRange(startDate, endDate);
+
     return (
         <div style={{ backgroundColor: '#121212', color: '#FFFFFF', minHeight: '100vh', padding: '20px' }}>
             <h1>Tarkov Spawn Chance Data</h1>
