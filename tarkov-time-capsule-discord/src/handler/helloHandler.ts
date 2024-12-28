@@ -53,13 +53,11 @@ const greetings: ((userID: UserID) => string)[] = [
 	(userID: UserID) => `What’s up, <@${userID}>? Ready to hunt Raiders on Reserve?`
 ];
 
-
-
 export const helloHandler: InteractionHandler = async (
 	interaction: Interaction
 ): Promise<InteractionResponse> => {
 	const userID = interaction.member.user.id;
-	const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
+	const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)](userID);
 
 	return {
 		type: InteractionResponseType.ChannelMessageWithSource,
