@@ -7,9 +7,10 @@
 import { env } from "../environments";
 
 interface SpawnRate {
+	BossName: string;
 	MapName: string;
 	Chance: number;
-	Date: string;
+	Timestamp: string;
 }
 
 export const bossesHandler: InteractionHandler = async (
@@ -34,24 +35,29 @@ export const bossesHandler: InteractionHandler = async (
 			};
 		}
 
-		// Define the date range (last week)
+		// Define the date range (last day)
 		const endDate = new Date().toISOString().split('T')[0];
-		const startDate = new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0];
+		const startDate = new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0];
 
-		// Fetch spawn rates for each boss
-		const spawnRatesPromises = bosses.map(bossName =>
-			fetch(`${env.REACT_APP_API_URL}api/spawnchance?bossName=${encodeURIComponent(bossName)}&startDate=${startDate}&endDate=${endDate}`)
-				.then(response => response.json() as Promise<SpawnRate[]>)
-				.then(spawnRates => ({ bossName, spawnRates }))
-		);
+		// Fetch spawn rates for all bosses within the date range
+		const response = await fetch(`${env.REACT_APP_API_URL}api/spawnchance?startDate=${startDate}&endDate=${endDate}`);
+		const spawnRates: SpawnRate[] = await response.json();
 
-		const bossesSpawnRates = await Promise.all(spawnRatesPromises);
+		if (spawnRates.length === 0) {
+			return {
+				type: InteractionResponseType.ChannelMessageWithSource,
+				data: {
+					content: `No spawn rates found for the specified date range.`,
+					allowed_mentions: {
+						users: [userID],
+					},
+				},
+			};
+		}
 
 		// Format the data into a readable table
 		const tableHeader = `| Boss | Map | Spawn Rate |\n| --- | --- | --- |\n`;
-		const tableRows = bossesSpawnRates.flatMap(({ bossName, spawnRates }) =>
-			spawnRates.map(rate => `| ${bossName} | ${rate.MapName} | ${rate.Chance * 100}% |`)
-		).join("\n");
+		const tableRows = spawnRates.map(rate => `| ${rate.BossName} | ${rate.MapName} | ${rate.Chance * 100}% |`).join("\n");
 
 		const table = tableHeader + tableRows;
 
