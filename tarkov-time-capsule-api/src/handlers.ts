@@ -16,6 +16,38 @@ export async function updateDatabase(d1: D1Database) {
 	}
 }
 
+export async function handleBossListRequest(d1: D1Database): Promise<Response> {
+	const query = 'SELECT BossName FROM Bosses';
+	const results = await d1.prepare(query).all();
+
+	const bosses = results.results.map((row: { BossName: string }) => row.BossName);
+
+	return new Response(JSON.stringify(bosses), {
+		headers: {
+			'Content-Type': 'application/json',
+			'Access-Control-Allow-Origin': '*', // Allow requests from any origin (for development purposes)
+			'Access-Control-Allow-Methods': 'GET, OPTIONS', // Allow specific methods
+			'Access-Control-Allow-Headers': 'Content-Type',
+		},
+	});
+}
+
+export async function handleMapListRequest(d1: D1Database): Promise<Response> {
+	const query = 'SELECT MapName FROM Maps';
+	const results = await d1.prepare(query).all();
+
+	const maps = results.results.map((row: { MapName: string }) => row.MapName);
+
+	return new Response(JSON.stringify(maps), {
+		headers: {
+			'Content-Type': 'application/json',
+			'Access-Control-Allow-Origin': '*', // Allow requests from any origin (for development purposes)
+			'Access-Control-Allow-Methods': 'GET, OPTIONS', // Allow specific methods
+			'Access-Control-Allow-Headers': 'Content-Type',
+		},
+	});
+}
+
 export async function handleSpawnChanceRequest(request: Request, d1: D1Database): Promise<Response> {
 	const url = new URL(request.url);
 
