@@ -7,6 +7,8 @@ import { createBossCommand } from "./command/bossCommand";
 import { helloHandler } from "./handler/helloHandler";
 import { helloCommand } from "./command/helloCommand";
 import { pingHandler } from "./handler/pingHandler";
+import {bossesCommand} from "./command/bossesCommand";
+import {bossesHandler} from "./handler/bossesHandler";
 
 const setupBot = async () => {
 	const bossCommand = await createBossCommand();
@@ -18,7 +20,8 @@ const setupBot = async () => {
 		commands: [
 			[ pingCommand, pingHandler ],
 			[ helloCommand, helloHandler ],
-			[ bossCommand, bossHandler ]
+			[ bossCommand, bossHandler ],
+			[ bossesCommand, bossesHandler ]
 		],
 	});
 };
