@@ -181,9 +181,133 @@ const SpawnChanceGraph = () => {
                         ))}
                     </select>
                 </label>
-                {/* Other input elements */}
+                <label style={{ marginRight: '15px' }}>
+                    Start Date:
+                    <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
+                    />
+                </label>
+                <label style={{ marginRight: '15px' }}>
+                    End Date:
+                    <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
+                    />
+                </label>
+                <div style={{ marginBottom: '15px', marginTop: '15px' }}>
+                    <label style={{ marginRight: '15px' }}>
+                        Cap Spawn Chance at 100%:
+                        <input
+                            type="checkbox"
+                            checked={capPercentage}
+                            onChange={(e) => {
+                                setCapPercentage(e.target.checked);
+                                if (e.target.checked && maxYAxisValue > 100) {
+                                    setMaxYAxisValue(100); // If capped, reset max value to 100 if it's over 100
+                                }
+                            }}
+                            style={{ marginLeft: '10px' }}
+                        />
+                    </label>
+                    <label style={{ marginRight: '15px' }}>
+                        Y-Axis Max Value:
+                        <select
+                            value={maxYAxisValue}
+                            onChange={(e) => setMaxYAxisValue(parseInt(e.target.value))}
+                            style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
+                            disabled={capPercentage && maxYAxisValue > 100} // Disable selecting values > 100 if cap is checked
+                        >
+                            {yAxisOptions
+                                .filter((value) => !capPercentage || value <= 100) // Filter out values greater than 100 if cap is checked
+                                .map((value, index) => (
+                                    <option key={index} value={value}>
+                                        {value}
+                                    </option>
+                                ))}
+                        </select>
+                    </label>
+                </div>
+                <button
+                    onClick={fetchData}
+                    style={{
+                        backgroundColor: '#444444',
+                        color: '#FFFFFF',
+                        border: 'none',
+                        padding: '10px 20px',
+                        cursor: 'pointer',
+                    }}
+                >
+                    Fetch Data
+                </button>
             </div>
-            {/* Chart and other elements */}
+
+            {chartData && (
+                <div>
+                    <Line
+                        data={chartData}
+                        options={{
+                            responsive: true,
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                    labels: {
+                                        color: '#FFFFFF', // Legend text color
+                                    },
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Spawn Chances Over Time',
+                                    color: '#FFFFFF', // Title text color
+                                },
+                                tooltip: {
+                                    titleColor: '#FFFFFF',
+                                    bodyColor: '#FFFFFF',
+                                    backgroundColor: '#333333',
+                                },
+                            },
+                            scales: {
+                                x: {
+                                    type: 'time', // Time scale for the x-axis
+                                    time: {
+                                        unit: 'minute', // Adjust the unit to display timestamps in detail
+                                        tooltipFormat: 'yyyy-MM-dd HH:mm:ss', // Display full timestamp in tooltip
+                                        displayFormats: {
+                                            minute: 'HH:mm', // Display format for each tick
+                                            hour: 'HH:mm', // Display format for hours
+                                            day: 'MMM dd', // Display format for days
+                                        },
+                                    },
+                                    title: {
+                                        display: true,
+                                        text: 'Timestamp',
+                                        color: '#FFFFFF', // X-axis title color
+                                    },
+                                    ticks: {
+                                        color: '#FFFFFF', // X-axis labels color
+                                    },
+                                },
+                                y: {
+                                    title: {
+                                        display: true,
+                                        text: 'Spawn Chance (%)',
+                                        color: '#FFFFFF', // Y-axis title color
+                                    },
+                                    min: 0,
+                                    max: capPercentage && maxYAxisValue > 100 ? 100 : maxYAxisValue, // Set max to 100 if cap is checked, otherwise use maxYAxisValue
+                                    ticks: {
+                                        color: '#FFFFFF', // Y-axis labels color
+                                    },
+                                },
+                            },
+                        }}
+                    />
+                </div>
+            )}
         </div>
     );
 };
