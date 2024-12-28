@@ -27,29 +27,24 @@ export const bossHandler: InteractionHandler = async (
 	try {
 		// Fetch data from your API
 		const response = await fetch(`${env.REACT_APP_API_URL}api/spawnchance?bossName=${encodeURIComponent(bossName)}`);
-		const spawnRates: { MapName: string; Chance: number; Date: string; Change?: number }[] = await response.json();
+		const spawnRates: { MapName: string; Chance: number; Date: string }[] = await response.json();
 
-		if (spawnRates.length === 0) {
-			return {
-				type: InteractionResponseType.ChannelMessageWithSource,
-				data: {
-					content: `It looks like **${bossName}** isn't spawning on any maps right now.`,
-					allowed_mentions: {
-						users: [userID],
-					},
-				},
-			};
-		}
+		// Create a map to store the latest spawn rate for each map
+		const latestSpawnRates = new Map<string, { MapName: string; Chance: number; Date: string }>();
 
-		// Find the latest timestamp
-		const latestTimestamp = Math.max(...spawnRates.map(rate => new Date(rate.Date).getTime()));
+		spawnRates.forEach((rate) => {
+			const existingRate = latestSpawnRates.get(rate.MapName);
+			if (!existingRate || new Date(rate.Date) > new Date(existingRate.Date)) {
+				latestSpawnRates.set(rate.MapName, rate);
+			}
+		});
 
-		// Filter spawn rates by the latest timestamp
-		const latestSpawnRates = spawnRates.filter(rate => new Date(rate.Date).getTime() === latestTimestamp);
+		// Convert the map back to an array
+		const latestSpawnRatesArray = Array.from(latestSpawnRates.values());
 
 		// Format the spawn rates into a readable message
-		const spawnRateMessage = latestSpawnRates
-			.map((rate) => `${rate.MapName}: ${rate.Chance * 100}%`)
+		const spawnRateMessage = latestSpawnRatesArray
+			.map((rate) => `${rate.MapName}: ${rate.Chance * 100}% (Date: ${rate.Date})`)
 			.join("\n");
 
 		return {
