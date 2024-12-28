@@ -19,29 +19,45 @@ export const bossesHandler: InteractionHandler = async (
 	const userID = interaction.member.user.id;
 
 	try {
-		// Define the date range (last day)
+		// Define the date range
 		const endDate = new Date().toISOString().split('T')[0];
 		const startDate = new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0];
 
-		// Fetch spawn rates for all bosses within the date range
+		// Fetch data from your API with date range
 		const response = await fetch(`${env.REACT_APP_API_URL}api/spawnchance?startDate=${startDate}&endDate=${endDate}`);
 		const spawnRates: SpawnRate[] = await response.json();
 
-		if (spawnRates.length === 0) {
-			return {
-				type: InteractionResponseType.ChannelMessageWithSource,
-				data: {
-					content: `No spawn rates found for the specified date range.`,
-					allowed_mentions: {
-						users: [userID],
-					},
-				},
-			};
-		}
+		// Group spawn rates by BossName
+		const groupedByBoss = spawnRates.reduce((acc, rate) => {
+			if (!acc[rate.BossName]) {
+				acc[rate.BossName] = [];
+			}
+			acc[rate.BossName].push(rate);
+			return acc;
+		}, {} as Record<string, SpawnRate[]>);
+
+		// Create a map to store the latest spawn rate for each map within each boss group
+		const latestSpawnRates = new Map<string, Map<string, SpawnRate>>();
+
+		Object.keys(groupedByBoss).forEach(bossName => {
+			const bossRates = groupedByBoss[bossName];
+			const bossMap = new Map<string, SpawnRate>();
+
+			bossRates.forEach((rate) => {
+				const existingRate = bossMap.get(rate.MapName);
+				if (!existingRate || new Date(rate.Timestamp) > new Date(existingRate.Timestamp)) {
+					bossMap.set(rate.MapName, rate);
+				}
+			});
+
+			latestSpawnRates.set(bossName, bossMap);
+		});
 
 		// Format the data into a readable table
 		const tableHeader = `| Boss | Map | Spawn Rate |\n| --- | --- | --- |\n`;
-		const tableRows = spawnRates.map(rate => `| ${rate.BossName} | ${rate.MapName} | ${rate.Chance * 100}% |`).join("\n");
+		const tableRows = Array.from(latestSpawnRates.entries()).flatMap(([bossName, mapRates]) =>
+			Array.from(mapRates.values()).map(rate => `| ${bossName} | ${rate.MapName} | ${rate.Chance * 100}% |`)
+		).join("\n");
 
 		const table = tableHeader + tableRows;
 
@@ -55,11 +71,11 @@ export const bossesHandler: InteractionHandler = async (
 			},
 		};
 	} catch (error) {
-		console.error("Error fetching bosses or spawn rates:", error);
+		console.error("Error fetching spawn rates:", error);
 		return {
 			type: InteractionResponseType.ChannelMessageWithSource,
 			data: {
-				content: `Something went wrong while fetching bosses or spawn rates, <@${userID}>. Please try again later.`,
+				content: `Something went wrong while fetching spawn rates, <@${userID}>. Please try again later.`,
 				allowed_mentions: {
 					users: [userID],
 				},
