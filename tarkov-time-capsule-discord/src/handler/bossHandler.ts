@@ -41,22 +41,15 @@ export const bossHandler: InteractionHandler = async (
 			};
 		}
 
-		// Create a map to store the latest spawn rate for each map
-		const latestSpawnRates = new Map<string, { MapName: string; Chance: number; Date: string; Change?: number }>();
+		// Find the latest timestamp
+		const latestTimestamp = Math.max(...spawnRates.map(rate => new Date(rate.Date).getTime()));
 
-		spawnRates.forEach((rate) => {
-			const existingRate = latestSpawnRates.get(rate.MapName);
-			if (!existingRate || new Date(rate.Date) > new Date(existingRate.Date)) {
-				latestSpawnRates.set(rate.MapName, rate);
-			}
-		});
-
-		// Convert the map back to an array
-		const latestSpawnRatesArray = Array.from(latestSpawnRates.values());
+		// Filter spawn rates by the latest timestamp
+		const latestSpawnRates = spawnRates.filter(rate => new Date(rate.Date).getTime() === latestTimestamp);
 
 		// Format the spawn rates into a readable message
-		const spawnRateMessage = latestSpawnRatesArray
-			.map((rate) => `${rate.MapName}: ${rate.Chance * 100}% (${new Date(rate.Date).toLocaleString()})`)
+		const spawnRateMessage = latestSpawnRates
+			.map((rate) => `${rate.MapName}: ${rate.Chance * 100}%`)
 			.join("\n");
 
 		return {
