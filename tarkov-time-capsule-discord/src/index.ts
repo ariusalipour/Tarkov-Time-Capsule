@@ -5,6 +5,7 @@ import { bossHandler } from "./handler/bossHandler";
 import { createBossCommand } from "./command/bossCommand";
 import {helloHandler} from "./handler/helloHandler";
 import {helloCommand} from "./command/helloCommand";
+import { env } from "./environments";
 
 const setupBot = async () => {
 	const bossCommand = await createBossCommand();

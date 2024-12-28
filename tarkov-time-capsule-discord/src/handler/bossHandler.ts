@@ -4,6 +4,7 @@
 	InteractionResponse,
 	InteractionResponseType,
 } from "@glenstack/cf-workers-discord-bot";
+import { env } from "../environments";
 
 export const bossHandler: InteractionHandler = async (
 	interaction: Interaction
