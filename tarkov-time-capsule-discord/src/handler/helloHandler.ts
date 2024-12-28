@@ -7,6 +7,18 @@
 
 type UserID = string;
 
+const specialGreetings: { [key: string]: string } = {
+	"180056302771240961": "Hey there <@180056302771240961>! You are the best for creating me!",
+	"292460374840705027": "Hello <@292460374840705027>! Did you know that a rectangle can be a square but a square can't be a rectangle?",
+	"725419864159944774": "Hey <@725419864159944774>! You sexy lumberjack, you!",
+	"270335425401323521": "Aye <@270335425401323521>! Are you sure you hit that guy, or did you just miss? Maybe you actually did get Tarkov'd",
+	"331922182303383552": "McBAAAAAAAAAAAAAAAAAAAAAAAAIIIIIIIN!",
+	"296157289306521602": "WHAT UP MATE! WHAT UP GUVNAH!",
+	"654674552324096033": "Seriously stop with the dad jokes! They're not funny!",
+	"313368832431489026": "From crashing your own car to picking up crashers, you've come a long way! Keep it up!",
+	"484082833669881876": "<@484082833669881876>! Deep Voice! Sexy Voice! Deep",
+};
+
 const greetings: ((userID: UserID) => string)[] = [
 	(userID: UserID) => `Hey, PMC <@${userID}>! Ready to raid?`,
 	(userID: UserID) => `Greetings, operator <@${userID}>! Scav run or PMC today?`,
@@ -50,14 +62,30 @@ const greetings: ((userID: UserID) => string)[] = [
 	(userID: UserID) => `Hello, <@${userID}>! What's your best barter today?`,
 	(userID: UserID) => `Howdy, <@${userID}>! Gotten any good backpack Tetris done?`,
 	(userID: UserID) => `Hey, <@${userID}>! Bet you forgot your factory key, huh?`,
-	(userID: UserID) => `What’s up, <@${userID}>? Ready to hunt Raiders on Reserve?`
+	(userID: UserID) => `What’s up, <@${userID}>? Ready to hunt Raiders on Reserve?`,
+	(userID: UserID) => `Yo, <@${userID}>! Got that LEDX for Therapist yet?`,
+	(userID: UserID) => `Hi, <@${userID}>! Don’t forget to check your extracts.`,
+	(userID: UserID) => `<@${userID}>, What's a Scav's favorite drink? A head-eyes tea!`,
+	(userID: UserID) => `<@${userID}>, What do you call a bear with no teeth? A gummy bear!`,
+	(userID: UserID) => `<@${userID}>, Why did the Scav cross the road? To get to the other side of the Customs checkpoint!`,
+	(userID: UserID) => `<@${userID}>, What do you call a Scav with a grenade? A boom-boi!`,
+	(userID: UserID) => `<@${userID}>, Why did the PMC bring a ladder to the raid? To get to the high ground!`,
+	(userID: UserID) => `<@${userID}>, What do you call a Scav with a helmet? A head-eyes magnet!`,
+	(userID: UserID) => `<@${userID}>, Why did the PMC bring a backpack to the raid? To carry all the loot!`,
+	(userID: UserID) => `<@${userID}>, What do you call a Scav with a gun? A cheeki breeki!`,
+	(userID: UserID) => `<@${userID}>, How does Killa exercise? By doing laps... on Interchange!`,
+	(userID: UserID) => `<@${userID}>, Why did the PMC break up with his gun? Recoil changes!`,
+	(userID: UserID) => `<@${userID}>, What's a Tarkov player's favorite song? Desync by the Bee Gees!`,
+	(userID: UserID) => `<@${userID}>, What's a Tarkov player's favorite movie? The Extraction Point!`,
+	(userID: UserID) => `<@${userID}>, What's a Tarkov player's favourite dessert? Sherpa Pie!`,
 ];
 
 export const helloHandler: InteractionHandler = async (
 	interaction: Interaction
 ): Promise<InteractionResponse> => {
 	const userID = interaction.member.user.id;
-	const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)](userID);
+	const useSpecialGreeting = specialGreetings[userID] && Math.random() < 0.5;
+	const randomGreeting = useSpecialGreeting ? specialGreetings[userID] : greetings[Math.floor(Math.random() * greetings.length)](userID);
 
 	return {
 		type: InteractionResponseType.ChannelMessageWithSource,
