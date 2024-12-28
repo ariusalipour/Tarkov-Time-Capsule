@@ -7,7 +7,7 @@ import {helloHandler} from "./handler/helloHandler";
 
 // Securely load secrets from environment variables
 let env = {
-	APPLICATION_SECRET: "Local development secret",
+	APPLICATION_SECRET: "",
 };
 
 const slashCommandHandler = createSlashCommandHandler({
