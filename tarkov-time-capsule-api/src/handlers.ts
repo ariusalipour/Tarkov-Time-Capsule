@@ -1,7 +1,6 @@
 ﻿import { D1Database } from '@cloudflare/workers-types';
 import { fetchGraphQLData } from './graphql';
 import { processAndInsertData } from './database';
-import type { Map } from './types';
 
 export async function updateDatabase(d1: D1Database) {
 	try {
@@ -20,7 +19,11 @@ export async function handleBossListRequest(d1: D1Database): Promise<Response> {
 	const query = 'SELECT BossName FROM Bosses';
 	const results = await d1.prepare(query).all();
 
-	const bosses = results.results.map((row: { BossName: string }) => row.BossName);
+	const toPascalCase = (str: string) => {
+		return str.replace(/\w+/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+	};
+
+	const bosses = results.results.map((row: { BossName: string }) => toPascalCase(row.BossName));
 
 	return new Response(JSON.stringify(bosses), {
 		headers: {
