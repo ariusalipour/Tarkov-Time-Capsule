@@ -7,14 +7,13 @@ import { createBossCommand } from "./command/bossCommand";
 import { helloHandler } from "./handler/helloHandler";
 import { helloCommand } from "./command/helloCommand";
 import { pingHandler } from "./handler/pingHandler";
-import { env } from "./environments";
 
 const setupBot = async () => {
 	const bossCommand = await createBossCommand();
 
 	return createSlashCommandHandler({
 		applicationID: "1305653116443557958",
-		applicationSecret: env.APPLICATION_SECRET,
+		applicationSecret: "zYuPj8UeYBqnAnn1FptYwEM_rGpvwdMQ",
 		publicKey: "cb2c904a8b7da1ac15b97f7168f21091d76710fc87115ffabe4d143c2c9cc74a",
 		commands: [
 			[ pingCommand, pingHandler ],

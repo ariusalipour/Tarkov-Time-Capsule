@@ -2,5 +2,5 @@
 
 export const helloCommand: ApplicationCommand = {
 	name: "hello",
-	description: "Bot will say hello to you!",
+	description: "Say hello to the bot!",
 };
