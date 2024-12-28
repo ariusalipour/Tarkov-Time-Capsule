@@ -1,4 +1,5 @@
 ﻿import { ApplicationCommand, ApplicationCommandOptionType } from "@glenstack/cf-workers-discord-bot";
+import { env } from "../environments";
 
 // Fetch boss names from the API and return an array of strings
 const fetchBossNames = async (): Promise<string[]> => {
