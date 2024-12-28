@@ -38,8 +38,8 @@ const SpawnChanceGraph = () => {
     const [startDate, setStartDate] = useState(formatDate(defaultStartDate));
     const [endDate, setEndDate] = useState(formatDate(defaultEndDate));
     const [chartData, setChartData] = useState(null);
-    const [maxYAxisValue, setMaxYAxisValue] = useState(10000);
-    const [capPercentage, setCapPercentage] = useState(false);
+    const [maxYAxisValue, setMaxYAxisValue] = useState(100);
+    const [capPercentage, setCapPercentage] = useState(true);
     const [bossOptions, setBossOptions] = useState([]);
     const [mapOptions, setMapOptions] = useState([]);
     const yAxisOptions = [10000, 1000, 100, 80, 60, 40, 20];
