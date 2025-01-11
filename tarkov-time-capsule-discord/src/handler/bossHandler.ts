@@ -64,13 +64,13 @@ export const bossHandler: InteractionHandler = async (
 
 		// Format the spawn rates into a readable message
 		const spawnRateMessage = latestSpawnRatesArray
-			.map((rate) => `- ${rate.MapName}: ${rate.Chance * 100}% (${new Date(rate.Timestamp)})`)
+			.map((rate) => `- ${rate.MapName}: ${rate.Chance * 100}%`)
 			.join("\n");
 
 		return {
 			type: InteractionResponseType.ChannelMessageWithSource,
 			data: {
-				content: `Spawn rates for **${bossName}**:\n${spawnRateMessage}`,
+				content: `(${new Date(rate.Timestamp)})\nSpawn rates for **${bossName}**:\n${spawnRateMessage}`,
 				allowed_mentions: {
 					users: [userID],
 				},
