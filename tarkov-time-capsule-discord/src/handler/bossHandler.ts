@@ -67,10 +67,17 @@ export const bossHandler: InteractionHandler = async (
 			.map((rate) => `- ${rate.MapName}: ${Math.floor(rate.Chance * 100)}%`)
 			.join("\n");
 
+		const date = new Date(rate.Timestamp);
+
+		const day = String(date.getDate()).padStart(2, '0');
+		const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are zero-based
+		const year = date.getFullYear();
+		const readableDate = `${day}/${month}/${year}`;
+
 		return {
 			type: InteractionResponseType.ChannelMessageWithSource,
 			data: {
-				content: `(${formatDate(new Date(rate.Timestamp))})\nSpawn rates for **${bossName}**:\n${spawnRateMessage}`,
+				content: `(${readableDate})\nSpawn rates for **${bossName}**:\n${spawnRateMessage}`,
 				allowed_mentions: {
 					users: [userID],
 				},
@@ -89,10 +96,3 @@ export const bossHandler: InteractionHandler = async (
 		};
 	}
 };
-
-function formatDate(date: Date): string {
-	const day = String(date.getDate()).padStart(2, '0');
-	const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are zero-based
-	const year = date.getFullYear();
-	return `${day}/${month}/${year}`;
-}
