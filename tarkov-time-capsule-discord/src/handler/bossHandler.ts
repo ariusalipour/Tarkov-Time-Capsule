@@ -70,7 +70,7 @@ export const bossHandler: InteractionHandler = async (
 		return {
 			type: InteractionResponseType.ChannelMessageWithSource,
 			data: {
-				content: `(${formatDate(new Date(rate.Timestamp))})\nSpawn rates for **${bossName}**:\n${spawnRateMessage}`,
+				content: `(${new Date(rate.Timestamp)})\nSpawn rates for **${bossName}**:\n${spawnRateMessage}`,
 				allowed_mentions: {
 					users: [userID],
 				},
