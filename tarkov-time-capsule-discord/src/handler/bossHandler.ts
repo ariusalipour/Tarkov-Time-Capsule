@@ -75,7 +75,7 @@ export const bossHandler: InteractionHandler = async (
 		const year = date.getFullYear();
 		const hours = String(date.getHours()).padStart(2, '0');
 
-		const readableDate = `${day}/${month}/${year}:${hours}`;
+		const readableDate = `${day}/${month} ${hours} hrs`;
 
 		return {
 			type: InteractionResponseType.ChannelMessageWithSource,
