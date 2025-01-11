@@ -73,12 +73,14 @@ export const bossHandler: InteractionHandler = async (
 		const day = String(date.getDate()).padStart(2, '0');
 		const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are zero-based
 		const year = date.getFullYear();
-		const readableDate = `${day}/${month}/${year}`;
+		const hours = String(date.getHours()).padStart(2, '0');
+
+		const readableDate = `${day}/${month}/${year}:${hours}`;
 
 		return {
 			type: InteractionResponseType.ChannelMessageWithSource,
 			data: {
-				content: `(${readableDate})\nSpawn rates for **${bossName}**:\n${spawnRateMessage}`,
+				content: `(${readableDate}) Spawn rates for **${bossName}**:\n${spawnRateMessage}`,
 				allowed_mentions: {
 					users: [userID],
 				},
