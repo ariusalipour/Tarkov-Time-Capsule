@@ -32,12 +32,9 @@ export const bossHandler: InteractionHandler = async (
 	}
 
 	try {
-		// Define the date range
-		const endDate = new Date().toISOString().split('T')[0];
-		const startDate = new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0];
 
 		// Fetch data from your API with date range
-		const response = await fetch(`${env.REACT_APP_API_URL}api/spawnchance?bossName=${encodeURIComponent(bossName)}&startDate=${startDate}&endDate=${endDate}`);
+		const response = await fetch(`${env.REACT_APP_API_URL}api/latestspawnchance?bossName=${encodeURIComponent(bossName)}`);
 		const spawnRates: SpawnRate[] = await response.json();
 
 		if (spawnRates.length === 0) {

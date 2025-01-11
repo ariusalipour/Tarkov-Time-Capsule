@@ -32,9 +32,9 @@ Use the /api/latestspawnchance endpoint to query boss spawn chances with optiona
   - ?groupBy=[boss|map|timestamp] : Group results by boss, map, or timestamp. Defaults to no grouping if not specified.
 
 Examples:
-  - /api/spawnchance?mapName=Customs
-  - /api/spawnchance?bossName=Reshala
-  - /api/spawnchance?groupBy=boss
+  - /api/latestspawnchance?mapName=Customs
+  - /api/latestspawnchance?bossName=Reshala
+  - /api/latestspawnchance?groupBy=boss
 
 Use the /api/spawnchance endpoint to query boss spawn chances with optional parameters:
   - ?mapName=[mapName] : Filter by specific map name.
