@@ -64,13 +64,13 @@ export const bossHandler: InteractionHandler = async (
 
 		// Format the spawn rates into a readable message
 		const spawnRateMessage = latestSpawnRatesArray
-			.map((rate) => `- ${rate.MapName}: ${rate.Chance * 100}%`)
+			.map((rate) => `- ${rate.MapName}: ${Math.floor(rate.Chance * 100)}%`)
 			.join("\n");
 
 		return {
 			type: InteractionResponseType.ChannelMessageWithSource,
 			data: {
-				content: `(${new Date(rate.Timestamp)})\nSpawn rates for **${bossName}**:\n${spawnRateMessage}`,
+				content: `(${formatDate(new Date(rate.Timestamp))})\nSpawn rates for **${bossName}**:\n${spawnRateMessage}`,
 				allowed_mentions: {
 					users: [userID],
 				},
@@ -88,4 +88,12 @@ export const bossHandler: InteractionHandler = async (
 			},
 		};
 	}
+
+	function formatDate(date: Date): string {
+		const day = String(date.getDate()).padStart(2, '0');
+		const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are zero-based
+		const year = date.getFullYear();
+		return `${day}/${month}/${year}`;
+	}
+
 };
