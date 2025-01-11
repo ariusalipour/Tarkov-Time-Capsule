@@ -1,5 +1,9 @@
 import { Env } from './types';
-import { updateDatabase, handleSpawnChanceRequest } from './handlers';
+import { updateDatabase,
+	handleSpawnChanceRequest,
+	handleMapListRequest,
+	handleBossListRequest,
+	handleLatestSpawnChanceRequest } from './handlers';
 
 export default {
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
@@ -11,9 +15,7 @@ export default {
 
 		if (pathname === "/api/latestspawnchance") {
 			return await handleLatestSpawnChanceRequest(request, env.DB);
-		}
-
-		if (pathname === "/api/spawnchance") {
+		} else if (pathname === "/api/spawnchance") {
 			return await handleSpawnChanceRequest(request, env.DB);
 		} else if (pathname === "/api/bosses") {
 			return await handleBossListRequest(env.DB);
