@@ -88,7 +88,7 @@ export const bossHandler: InteractionHandler = async (
 		return {
 			type: InteractionResponseType.ChannelMessageWithSource,
 			data: {
-				content: `Something went wrong while fetching spawn rates for **${bossName}**, <@${userID}>. Please try again later.`,
+				content: `Something went wrong while fetching spawn rates for **${bossName}**, <@${userID}>. Please try again later.\n\n${error}`,
 				allowed_mentions: {
 					users: [userID],
 				},
