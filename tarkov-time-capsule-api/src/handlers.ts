@@ -60,12 +60,12 @@ export async function handleLatestSpawnChanceRequest(request: Request, d1: D1Dat
 		params.set(key.toLowerCase(), value);
 	});
 
-	const mapName = params.get('mapName');
-	const bossName = params.get('bossName');
-	const groupBy = params.get('groupBy');
+	const mapName = params.get('mapname');
+	const bossName = params.get('bossname');
+	const groupBy = params.get('groupby');
 
 	const now = Date.now() / 1000;
-	const oneHour = now - 60 * 60;
+	const oneHourAgo = now - 60 * 60;
 
 	let query = `
 		SELECT Maps.MapName, Bosses.BossName, SpawnChances.Chance, Timestamps.Timestamp
@@ -75,7 +75,7 @@ export async function handleLatestSpawnChanceRequest(request: Request, d1: D1Dat
 				 JOIN Timestamps ON SpawnChances.TimestampID = Timestamps.TimestampID
 		WHERE Timestamps.Timestamp BETWEEN ? AND ?
 	`;
-	const bindings: (string | number)[] = [oneHour, now];
+	const bindings: (string | number)[] = [oneHourAgo, now];
 
 	if (mapName) {
 		query += ' AND LOWER(Maps.MapName) = LOWER(?)';
