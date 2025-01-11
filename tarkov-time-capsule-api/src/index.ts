@@ -1,5 +1,5 @@
 import { Env } from './types';
-import { updateDatabase, handleSpawnChanceRequest, handleLatestSpawnChanceRequest } from './handlers';
+import { updateDatabase, handleSpawnChanceRequest } from './handlers';
 
 export default {
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
@@ -15,6 +15,10 @@ export default {
 
 		if (pathname === "/api/spawnchance") {
 			return await handleSpawnChanceRequest(request, env.DB);
+		} else if (pathname === "/api/bosses") {
+			return await handleBossListRequest(env.DB);
+		} else if (pathname === "/api/maps") {
+			return await handleMapListRequest(env.DB);
 		}
 
 		return new Response(
@@ -37,6 +41,10 @@ Use the /api/spawnchance endpoint to query boss spawn chances with optional para
   - ?endDate=[YYYY-MM-DD] : Filter results until this end date.
   - ?groupBy=[boss|map|timestamp] : Group results by boss, map, or timestamp. Defaults to no grouping if not specified.
 
+Use the /api/bosses endpoint to get the list of all bosses.
+
+Use the /api/maps endpoint to get the list of all maps.
+
 Examples:
   - /api/spawnchance?mapName=Customs
   - /api/spawnchance?bossName=Reshala
@@ -44,8 +52,10 @@ Examples:
   - /api/spawnchance?groupBy=boss
   - /api/spawnchance?groupBy=map&startDate=2024-10-01
   - /api/spawnchance?groupBy=timestamp
+  - /api/bosses
+  - /api/maps
 
-By default, the endpoint returns results from the last week if no date range is specified, and the response is ungrouped unless specified by the groupBy parameter.
+By default, the /api/spawnchance endpoint returns results from the last week if no date range is specified, and the response is ungrouped unless specified by the groupBy parameter.
 `,
 			{ headers: { 'Content-Type': 'text/plain' } }
 		);

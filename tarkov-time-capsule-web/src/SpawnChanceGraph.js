@@ -11,9 +11,8 @@ import {
     Legend,
     TimeScale,
 } from 'chart.js';
-import 'chartjs-adapter-date-fns'; // Import the date adapter
+import 'chartjs-adapter-date-fns';
 
-// Register the components you are using
 ChartJS.register(
     CategoryScale,
     LinearScale,
@@ -22,42 +21,65 @@ ChartJS.register(
     Title,
     Tooltip,
     Legend,
-    TimeScale // Register the time scale
+    TimeScale
 );
 
 const SpawnChanceGraph = () => {
-    // Calculate default dates
     const now = new Date();
     const defaultEndDate = new Date(now);
-    defaultEndDate.setDate(now.getDate() + 1); // Tomorrow
+    defaultEndDate.setDate(now.getDate() + 1);
     const defaultStartDate = new Date(now);
-    defaultStartDate.setDate(now.getDate() - 7); // One week prior
+    defaultStartDate.setDate(now.getDate() - 7);
 
-    // Format the dates as YYYY-MM-DD for input fields
     const formatDate = (date) => date.toISOString().split('T')[0];
 
-    // State variables
     const [mapName, setMapName] = useState('');
     const [bossName, setBossName] = useState('');
-    const [startDate, setStartDate] = useState(formatDate(defaultStartDate)); // Default to one week prior
-    const [endDate, setEndDate] = useState(formatDate(defaultEndDate)); // Default to tomorrow
+    const [startDate, setStartDate] = useState(formatDate(defaultStartDate));
+    const [endDate, setEndDate] = useState(formatDate(defaultEndDate));
     const [chartData, setChartData] = useState(null);
-    const [maxYAxisValue, setMaxYAxisValue] = useState(10000); // State for dropdown to control max Y-axis value
-    const [capPercentage, setCapPercentage] = useState(false); // State for checkbox to cap values at 100%
+    const [maxYAxisValue, setMaxYAxisValue] = useState(100);
+    const [capPercentage, setCapPercentage] = useState(true);
+    const [bossOptions, setBossOptions] = useState([]);
+    const [mapOptions, setMapOptions] = useState([]);
+    const yAxisOptions = [10000, 1000, 100, 80, 60, 40, 20];
 
-    // Prepare the data for the chart
+    // Fetch Boss and Map Options
+    useEffect(() => {
+        const fetchBosses = async () => {
+            try {
+                const response = await fetch(`${process.env.REACT_APP_API_URL}api/bosses`);
+                if (!response.ok) throw new Error('Failed to fetch bosses');
+                const data = await response.json();
+                setBossOptions(data); // Assumes data is an array of boss names
+            } catch (error) {
+                console.error('Error fetching bosses:', error);
+            }
+        };
+
+        const fetchMaps = async () => {
+            try {
+                const response = await fetch(`${process.env.REACT_APP_API_URL}api/maps`);
+                if (!response.ok) throw new Error('Failed to fetch maps');
+                const data = await response.json();
+                setMapOptions(data); // Assumes data is an array of map names
+            } catch (error) {
+                console.error('Error fetching maps:', error);
+            }
+        };
+
+        fetchBosses();
+        fetchMaps();
+    }, []);
+
     const prepareChartData = useCallback(
         (apiData) => {
-            if (!apiData) {
-                return;
-            }
+            if (!apiData) return;
 
-            // Determine how to group the data
             const shouldGroupByBoss = mapName !== '' || (mapName !== '' && bossName !== '');
             const shouldGroupByMap = bossName !== '' && mapName === '';
             const shouldGroupByBoth = mapName === '' && bossName === '';
 
-            // Create a dataset based on the grouping preference
             const groupedData = {};
 
             apiData.forEach((item) => {
@@ -85,17 +107,14 @@ const SpawnChanceGraph = () => {
                     };
                 }
 
-                // Convert spawn chance to percentage
                 let spawnChancePercentage = item.Chance * 100;
-
-                // Cap values at 100 if the checkbox is checked
                 if (capPercentage && spawnChancePercentage > 100) {
                     spawnChancePercentage = 100;
                 }
 
                 groupedData[groupKey].data.push({
-                    x: new Date(item.Timestamp), // X-axis is the timestamp
-                    y: spawnChancePercentage, // Y-axis is the spawn chance in percentage
+                    x: new Date(item.Timestamp),
+                    y: spawnChancePercentage,
                 });
             });
 
@@ -103,64 +122,39 @@ const SpawnChanceGraph = () => {
                 datasets: Object.values(groupedData),
             });
         },
-        [mapName, bossName, capPercentage] // Add dependencies for mapName, bossName, and capPercentage
+        [mapName, bossName, capPercentage]
     );
 
-    // UseCallback for fetchData
     const fetchData = useCallback(async () => {
         try {
-            let url = process.env.REACT_APP_API_URL + `api/spawnchance?`;
+            let url = `${process.env.REACT_APP_API_URL}api/spawnchance?`;
             if (mapName) url += `mapName=${mapName}&`;
             if (bossName) url += `bossName=${bossName}&`;
             if (startDate) url += `startDate=${startDate}&`;
             if (endDate) url += `endDate=${endDate}&`;
 
             const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`API request failed with status ${response.status}`);
-            }
+            if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
 
             const result = await response.json();
-            prepareChartData(result); // Update the chart data once the data is fetched
+            prepareChartData(result);
         } catch (error) {
-            console.error("Error fetching data:", error);
+            console.error('Error fetching data:', error);
         }
-    }, [mapName, bossName, startDate, endDate, prepareChartData]); // Add `prepareChartData` to dependencies
+    }, [mapName, bossName, startDate, endDate, prepareChartData]);
 
-    // Load data when the component mounts
     useEffect(() => {
         fetchData();
-    }, [fetchData]); // Add `fetchData` as a dependency
+    }, [fetchData]);
 
-    // Boss and Map options
-    const bossOptions = [
-        'Infected Tagilla',
-        'Infected',
-        'Assault',
-        'Knight',
-        'Reshala',
-        'Shturman',
-        'Zryachiy',
-        'Partisan',
-        'Rogue',
-        'Sanitar',
-    ];
+    const calculateDateRange = (start, end) => {
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+        const timeDiff = Math.abs(endDate - startDate);
+        return Math.ceil(timeDiff / (1000 * 3600 * 24)); // Convert milliseconds to days
+    };
 
-    const mapOptions = [
-        'Factory',
-        'Customs',
-        'Woods',
-        'Lighthouse',
-        'Shoreline',
-        'Reserve',
-        'Interchange',
-        'Streets of Tarkov',
-        'Night Factory',
-        'The Lab',
-    ];
-
-    // Y-axis max value options
-    const yAxisOptions = [10000, 1000, 100, 80, 60, 40, 20];
+    const dateRange = calculateDateRange(startDate, endDate);
 
     return (
         <div style={{ backgroundColor: '#121212', color: '#FFFFFF', minHeight: '100vh', padding: '20px' }}>
@@ -247,18 +241,6 @@ const SpawnChanceGraph = () => {
                         </select>
                     </label>
                 </div>
-                <button
-                    onClick={fetchData}
-                    style={{
-                        backgroundColor: '#444444',
-                        color: '#FFFFFF',
-                        border: 'none',
-                        padding: '10px 20px',
-                        cursor: 'pointer',
-                    }}
-                >
-                    Fetch Data
-                </button>
             </div>
 
             {chartData && (
@@ -289,10 +271,9 @@ const SpawnChanceGraph = () => {
                                 x: {
                                     type: 'time', // Time scale for the x-axis
                                     time: {
-                                        unit: 'minute', // Adjust the unit to display timestamps in detail
+                                        unit: dateRange > 3 ? 'day' : 'hour', // Adjust the unit to display timestamps in detail
                                         tooltipFormat: 'yyyy-MM-dd HH:mm:ss', // Display full timestamp in tooltip
                                         displayFormats: {
-                                            minute: 'HH:mm', // Display format for each tick
                                             hour: 'HH:mm', // Display format for hours
                                             day: 'MMM dd', // Display format for days
                                         },
