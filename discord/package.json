@@ -1,0 +1,14 @@
+{
+  "name": "tarkov-time-capsule-discord",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test.mjs updates/updates.test.mjs",
+    "updates": "node updates/updates.mjs",
+    "register": "node register-commands.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -4,11 +4,9 @@
 **/dist
 **/.env*
 **/.dev.vars*
-**/.wrangler
 data
 backups
 *.tar
-tarkov-time-capsule-discord
 
 secrets
 discord-state
@@ -17,3 +15,5 @@ privacy-requests
 *.sqlite-*
 *.db
 *.db-*
+.idea
+**/.idea

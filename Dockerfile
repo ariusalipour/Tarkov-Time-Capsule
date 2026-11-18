@@ -1,26 +1,25 @@
 FROM node:24-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54 AS web
 WORKDIR /app/web
-COPY tarkov-time-capsule-web/package*.json ./
+COPY web/package*.json ./
 RUN npm ci --no-audit --no-fund
-COPY tarkov-time-capsule-web/ ./
+COPY web/ ./
 ENV REACT_APP_API_URL=/
 ENV GENERATE_SOURCEMAP=false
 RUN npm run build
 
 FROM node:24-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54 AS api
-WORKDIR /app/nas
-COPY nas/package*.json ./
+WORKDIR /app/api
+COPY api/package*.json ./
 RUN npm ci --no-audit --no-fund
-COPY nas/ ./
-COPY tarkov-time-capsule-api/src/ /app/tarkov-time-capsule-api/src/
+COPY api/ ./
 RUN npm test && npm run build
 
 FROM node:24-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54
 ENV NODE_ENV=production PORT=3000 DATABASE_PATH=/data/tarkov-time-capsule.sqlite STATIC_DIR=/app/public SCHEDULER_ENABLED=false
 WORKDIR /app
-COPY nas/package*.json ./
+COPY api/package*.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
-COPY --from=api /app/nas/dist/ ./dist/
+COPY --from=api /app/api/dist/ ./dist/
 COPY --from=web /app/web/build/ ./public/
 RUN mkdir /data && chown node:node /data
 USER node
