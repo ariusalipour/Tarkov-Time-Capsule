@@ -68,3 +68,34 @@ export function recordsCsv(records) {
   const rows = [['Map', 'Boss', 'Timestamp UTC', 'Spawn chance (%)'], ...records.map(row => [row.MapName, row.BossName, row.Timestamp, Number(row.Chance) * 100])];
   return rows.map(row => row.map(csvCell).join(',')).join('\r\n');
 }
+
+export function historyUrl(filters, cursor = null) {
+  const url = new URL(queryUrl(filters), 'https://archive.invalid');
+  url.pathname = url.pathname.replace('/api/spawnchance', '/api/history');
+  url.searchParams.set('limit', '250');
+  url.searchParams.set('endDate', new Date(Date.parse(`${nextDay(filters.endDate)}T00:00:00Z`) - 1).toISOString());
+  if (cursor) url.searchParams.set('cursor', cursor);
+  return apiUrl(`api/history?${url.searchParams}`);
+}
+export function summaryUrl(filters) {
+  return historyUrl(filters).replace('/api/history?', '/api/history/summary?').replace('limit=250', 'resolution=auto');
+}
+export const rawRecords = records => records.map(row => ({ MapName: row.mapName, BossName: row.bossName, Chance: row.spawnChance, Timestamp: row.timestamp, id: row.id }));
+export function summarySeries(summary) {
+  return summary.series.map(item => {
+    const label = `${item.mapName} / ${item.bossName}`;
+    const hash = [...label].reduce((value, character) => ((value * 31 + character.charCodeAt(0)) >>> 0), 0);
+    const points = item.points.slice().sort((a, b) => Date.parse(a.firstTimestamp) - Date.parse(b.firstTimestamp));
+    const data = [];
+    let gaps = 0;
+    points.forEach((point, index) => {
+      if (index && point.segment !== points[index - 1].segment) { data.push({ x: Date.parse(point.firstTimestamp) - 1, y: null }); gaps++; }
+      data.push({ x: Date.parse(point.firstTimestamp), y: point.average * 100, bucket: point });
+    });
+    const latest = points[points.length - 1];
+    return { label, color: colors[hash % colors.length], data, gaps, points,
+      latest: { MapName: item.mapName, BossName: item.bossName, Chance: latest?.latest, Timestamp: latest?.lastTimestamp },
+      count: points.reduce((total, point) => total + point.count, 0),
+      min: Math.min(...points.map(point => point.min * 100)), max: Math.max(...points.map(point => point.max * 100)) };
+  }).filter(item => item.points.length);
+}

@@ -1,3 +1,4 @@
+import { handleHistoryRequest, handleHistorySummaryRequest } from './history.mjs';
 const headers = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
@@ -95,6 +96,8 @@ export async function handleSpawnChanceRequest(request, db) {
 
 export async function handleApiRequest(request, db) {
   switch (new URL(request.url).pathname) {
+    case '/api/history': return handleHistoryRequest(request, db);
+    case '/api/history/summary': return handleHistorySummaryRequest(request, db);
     case '/api/maps': return handleMapListRequest(db);
     case '/api/bosses': return handleBossListRequest(db);
     case '/api/spawnchance': return handleSpawnChanceRequest(request, db);

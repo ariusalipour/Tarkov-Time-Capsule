@@ -36,6 +36,7 @@ jobs:
           npm audit --prefix api --json > /tmp/api-audit.json || true
           node scripts/check-audit.mjs /tmp/api-audit.json
       - run: npm test --prefix api
+      - run: python3 -B -m unittest discover -s api -p test_restore_rehearsal.py
       - run: npm run build --prefix api
       - run: npm test --prefix discord
       - run: npm ci --prefix web
@@ -52,7 +53,7 @@ jobs:
           --memory=512m --pids-limit=128 --cap-drop=ALL --security-opt=no-new-privileges:true
           -v "$PWD/api:/tests:ro" --entrypoint /nodejs/bin/node
           tarkov-time-capsule:local --test /tests/test/api.test.mjs
-          /tests/test/runtime.test.mjs /tests/test/security.test.mjs /tests/test/upstream.test.mjs
+          /tests/test/runtime.test.mjs /tests/test/security.test.mjs /tests/test/upstream.test.mjs /tests/test/history.test.mjs
       - name: Test bot against the production runtime
         run: >-
           docker run --rm --network none --read-only --tmpfs /tmp:size=64m

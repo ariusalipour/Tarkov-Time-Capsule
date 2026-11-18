@@ -15,8 +15,4 @@ npm, container and Actions updates; review and test those changes before merging
 Pinned runtime and scanner images still need regular review and updates.
 
 The audit checker fails on every reported severity and on invalid audit output.
-One temporary exception covers only withdrawn advisory
-[GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf), verified
-withdrawn on 18 November 2026 while npm still reports it. The exception expires
-18 December 2026, does not suppress new advisories on the same package, and should
-be removed once npm's feed refreshes. Raw audit reports remain available in CI.
+There are no advisory exceptions. Raw audit reports remain available in CI.

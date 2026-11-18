@@ -2,14 +2,15 @@ import { vi } from 'vitest';
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
-import { cleanRecords, csvCell, recordsCsv, nextDay, queryUrl, recentRange, seriesFrom, utcTime } from './archiveData';
+import { cleanRecords, csvCell, recordsCsv, nextDay, queryUrl, recentRange, seriesFrom, summarySeries, historyUrl, rawRecords, utcTime } from './archiveData';
 
 vi.mock('react-chartjs-2', () => ({ Line: props => <div role="img" aria-label={props['aria-label']} /> }));
 vi.mock('chart.js', () => ({ Chart: { register: vi.fn() }, LinearScale: {}, PointElement: {}, LineElement: {}, Tooltip: {}, Legend: {} }));
-const json = data => Promise.resolve({ ok: true, json: () => Promise.resolve(data) });
+const json = data => Promise.resolve({ ok: true, json: () => Promise.resolve(Array.isArray(data) && data.length === 0 ? { series: [], resolution: 'hour' } : data) });
 const record = (Timestamp, Chance = 0.3, BossName = 'Reshala', MapName = 'Customs') => ({ Timestamp, Chance, BossName, MapName });
 const window = { startDate: '2026-11-01', endDate: '2026-11-18' };
 const metadata = url => {
+  if (url.includes('/api/history?')) return json({ records: [], nextCursor: null, snapshotId: 1 });
   if (url.includes('api/maps')) return json(['Customs', 'Woods']);
   if (url.includes('api/bosses')) return json(['Reshala', 'Shturman']);
   if (url.includes('healthz')) return json({ database: { latestTimestamp: '2026-11-18T11:00:00Z', stale: false }, collection: { enabled: true } });
@@ -81,19 +82,19 @@ test('request failure shows retry and recovers to an honest empty state', async 
   fireEvent.click(screen.getByRole('button', { name: /Retry request/ }));
   await screen.findByText('No observations in this view');
   expect(screen.getByText(/No data does not mean a 0%/)).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Export CSV' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Export page CSV' })).toBeDisabled();
 });
 test('invalid date order prevents a query and health failures do not block history', async () => {
   global.fetch = vi.fn(url => url.includes('healthz') ? Promise.reject(new Error('Unavailable')) : metadata(url) || json([]));
   render(<App />);
   await screen.findAllByText('Status unavailable');
   await screen.findByText('No observations in this view');
-  const before = global.fetch.mock.calls.filter(([url]) => url.includes('spawnchance')).length;
+  const before = global.fetch.mock.calls.filter(([url]) => url.includes('history/summary')).length;
   fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-12-10' } });
   fireEvent.change(screen.getByLabelText('Through'), { target: { value: '2026-12-01' } });
   fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
   expect(screen.getByRole('alert')).toHaveTextContent('end date must be on or after');
-  expect(global.fetch.mock.calls.filter(([url]) => url.includes('spawnchance'))).toHaveLength(before);
+  expect(global.fetch.mock.calls.filter(([url]) => url.includes('history/summary'))).toHaveLength(before);
 });
 
 test('CSV export neutralises spreadsheet formulas and escapes embedded delimiters', () => {
@@ -105,7 +106,7 @@ test('CSV export neutralises spreadsheet formulas and escapes embedded delimiter
   expect(recordsCsv([record('2026-11-18T12:00:00Z', 0.3, '=1+1')])).toContain('"\'=1+1"');
 });
 test.each([
-  [413, 'Choose a shorter date range'],
+  [413, 'Select a map and boss'],
   [400, 'Check the dates and filter values'],
   [429, 'Wait a moment before retrying'],
 ])('API %s errors give actionable guidance and keep filters editable', async (status, message) => {
@@ -113,4 +114,79 @@ test.each([
   render(<App />);
   expect(await screen.findByRole('alert')).toHaveTextContent(message);
   expect(screen.getByRole('button', { name: 'Apply filters' })).toBeEnabled();
+});
+
+test('summary pipeline preserves segment gaps, ranges, counts and exact latest values', () => {
+  const point = { timestamp: '2026-11-01T00:00:00Z', firstTimestamp: '2026-11-01T01:00:00Z', lastTimestamp: '2026-11-01T02:00:00Z', min: .2, max: .4, average: .3, latest: .4, count: 2, segment: 0 };
+  const [series] = summarySeries({ series: [{ mapName: 'Customs', bossName: 'Reshala', points: [point, { ...point, timestamp: '2026-11-03T00:00:00Z', firstTimestamp: '2026-11-03T00:00:00Z', lastTimestamp: '2026-11-03T01:00:00Z', latest: .6, max: .6, segment: 1 }] }] });
+  expect(series.data.map(point => point.y)).toEqual([30, null, 30]);
+  expect(series.count).toBe(4); expect(series.min).toBe(20); expect(series.max).toBe(60); expect(series.latest.Chance).toBe(.6);
+  expect(rawRecords([{ id: 7, mapName: 'Customs', bossName: 'Reshala', spawnChance: .6, timestamp: point.lastTimestamp }])[0].Chance).toBe(.6);
+  expect(historyUrl({ ...window }, 'a+b')).toContain('cursor=a%2Bb');
+});
+test('raw pagination aborts replaced requests, rejects stale results and resets with applied filters', async () => {
+  const requests = [];
+  let resolveSecond;
+  global.fetch = vi.fn((url, options) => {
+    if (url.includes('/api/history?')) {
+      requests.push({ url, signal: options.signal });
+      if (url.includes('cursor=')) return new Promise(resolve => { resolveSecond = resolve; });
+      return json({ records: [{ id: 1, mapName: 'Customs', bossName: 'Reshala', spawnChance: .4, timestamp: new Date().toISOString() }], nextCursor: 'next', snapshotId: 1 });
+    }
+    return metadata(url) || json([]);
+  });
+  render(<App />);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Next page' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(requests[0].signal.aborted).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: '30 days' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
+  await waitFor(() => expect(requests).toHaveLength(3));
+  expect(requests[1].signal.aborted).toBe(true);
+  expect(requests[2].url).not.toContain('cursor=');
+  await act(async () => resolveSecond({ ok: true, json: () => Promise.resolve({ records: [{ id: 2, mapName: 'Old', bossName: 'Old', spawnChance: .99, timestamp: new Date().toISOString() }], nextCursor: null }) }));
+  expect(screen.queryByText('Old')).not.toBeInTheDocument();
+  expect(screen.getByText('Page 1 - 1 observations')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Export page CSV' })).toBeEnabled();
+});
+
+test('long-history summaries show resolution and full-window statistics independently of the raw page', async () => {
+  global.fetch = vi.fn(url => {
+    if (url.includes('/api/history/summary?')) return json({ resolution: 'week', bucketSeconds: 604800, series: [{ mapName: 'Customs', bossName: 'Reshala', points: [{ timestamp: '2026-11-16T00:00:00Z', firstTimestamp: '2026-11-18T01:00:00Z', lastTimestamp: '2026-11-18T04:00:00Z', min: .2, max: .6, average: .4, latest: .6, count: 900, segment: 0 }] }] });
+    return metadata(url) || json([]);
+  });
+  render(<App />);
+  await screen.findByText('Weekly average spawn chance');
+  expect(screen.getAllByText('900')).toHaveLength(2);
+  expect(screen.getAllByText('60%')).toHaveLength(2);
+  expect(screen.getByText(/Weekly averages/)).toBeInTheDocument();
+  expect(screen.getByText('No raw observations on this page.')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Export page CSV' })).toBeDisabled();
+});
+
+test('expired page cursor restarts raw observations from the first page', async () => {
+  const requests = [];
+  global.fetch = vi.fn(url => {
+    if (url.includes('/api/history?')) {
+      requests.push(url);
+      if (new URL(url, 'https://example.com').searchParams.has('cursor')) return Promise.resolve({ ok: false, status: 400 });
+      return json({ records: [{ id: 1, mapName: 'Customs', bossName: 'Reshala', spawnChance: .4, timestamp: new Date().toISOString() }], nextCursor: 'expired', snapshotId: 1 });
+    }
+    return metadata(url) || json([]);
+  });
+  render(<App />);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Next page' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+  await screen.findByRole('button', { name: 'Restart observations' });
+  fireEvent.click(screen.getByRole('button', { name: 'Restart observations' }));
+  await waitFor(() => expect(requests).toHaveLength(3));
+  expect(requests[2]).not.toContain('cursor=');
+  expect(await screen.findByText('Page 1 - 1 observations')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+});
+test('new history and summary endpoints end at the final millisecond of the selected UTC day', () => {
+  const url = new URL(historyUrl({ ...window }), 'https://example.com');
+  expect(url.searchParams.get('endDate')).toBe('2026-11-18T23:59:59.999Z');
 });
