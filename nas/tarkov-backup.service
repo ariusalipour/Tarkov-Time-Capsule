@@ -1,0 +1,8 @@
+[Unit]
+Description=Verified online Tarkov Time Capsule SQLite backup
+
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=/usr/bin/python3 /home/mockachino/apps/tarkov-time-capsule/source/nas/scheduled-backup.py
+TimeoutStartSec=10min

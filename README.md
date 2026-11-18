@@ -1,94 +1,27 @@
-# Tarkov Time Capsule Solution
+# Tarkov Time Capsule
 
-## Table of Contents
+Historical Escape from Tarkov boss spawn chances, with a React archive and Discord bot. Observations are Tarkov.dev regular/PvP API values, not guarantees about live raids.
 
-- [Overview](#overview)
-- [Features](#features)
-- [Sub-Projects](#sub-projects)
-- [Setup and Installation](#setup-and-installation)
-- [Contributing](#contributing)
-- [License](#license)
+## Production
 
-## Overview
+The frontend, API, SQLite archive and hourly collector run on nas-linux using Docker Compose. Separate NAS containers handle signed Discord interactions and change-only notifications. Cloudflare supplies DNS, Tunnel and TLS only; Workers, Pages and D1 are retired.
 
-The Tarkov Time Capsule is a comprehensive solution designed to collect, store, and analyze data from the Tarkov game. It consists of multiple sub-projects that work together to provide historical data analysis, real-time Discord interactions, and a seamless web interface for users.
+- [Archive](https://tarkovcapsule.mockachino.app/)
+- [Add the bot](https://discord.com/oauth2/authorize?client_id=1572583284146446438&scope=bot%20applications.commands&permissions=3072&integration_type=0)
+- [Project](https://mockachino.app/projects/tarkov-time-capsule/), [Terms](https://mockachino.app/projects/tarkov-time-capsule/terms/), [Privacy](https://mockachino.app/projects/tarkov-time-capsule/privacy/)
 
-This solution leverages modern technologies like Cloudflare Workers, D1 databases, React, and Discord API integrations to deliver an end-to-end experience for users and developers alike.
+The Discord application belongs to Mockachino; verification is complete and Discovery is enabled. Support/privacy requests: app@outdoortechnica.com.
 
-## Features
+## Development
 
-- Historical data collection and analysis.
-- Real-time data querying via a Discord bot.
-- Interactive and responsive web interface.
-- Modular architecture for easy development and maintenance.
+Clone https://github.com/ariusalipour/Tarkov-Time-Capsule.git and use Node 24. In tarkov-time-capsule-web run npm ci and npm start; configure REACT_APP_API_URL for a reachable API. Production uses same-origin /api/ routes.
 
-## Sub-Projects
+The nas directory contains the Node runtime, SQLite adapter, collector and backups. nas-discord handles interactions and subscriptions; nas-discord-updates delivers changes. Historical API handlers in tarkov-time-capsule-api/src are shared with the NAS runtime. The old Discord Worker source is retained for reference; its deploy command is disabled and Wrangler configs are archived.
 
-The Tarkov Time Capsule consists of the following sub-projects:
+See [NAS deployment and recovery](NAS-MIGRATION.md) for production operations. Old subproject README deployment instructions are historical.
 
-1. **[Tarkov Time Capsule API](#)**
-   - Provides backend services for data collection and querying.
-   - For detailed setup and usage, see the [API README](./tarkov-time-capsule-api/README.md).
+## Validation
 
-2. **[Tarkov Time Capsule Discord Bot](#)**
-   - An interactive Discord bot for real-time data querying.
-   - For detailed setup and usage, see the [Discord Bot README](./tarkov-time-capsule-discord/README.md).
+In nas run npm ci, npm test and npm run build. From the root run node --test nas-discord/test.mjs nas-discord-updates/updates.test.mjs. In the web directory run npm ci, npm test -- --watchAll=false and npm run build. Tests use synthetic fixtures and do not send Discord messages.
 
-3. **[Tarkov Time Capsule Web](#)**
-   - A web application for data visualization and interaction.
-   - For detailed setup and usage, see the [Web README](./tarkov-time-capsule-web/README.md).
-
-## Setup and Installation
-
-Each sub-project has its own setup instructions detailed in its respective README file. To get started with the solution:
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/Tarkov-Time-Capsule.git
-   cd Tarkov-Time-Capsule
-   ```
-
-2. Navigate to the desired sub-project folder and follow the setup instructions in its README.
-
-### Example:
-
-To set up the API:
-```bash
-cd tarkov-time-capsule-api
-npm install
-npm run dev
-```
-
-To set up the Discord Bot:
-```bash
-cd tarkov-time-capsule-discord
-npm install
-npm run dev
-```
-
-To set up the Web application:
-```bash
-cd tarkov-time-capsule-web
-npm install
-npm start
-```
-
-## Contributing
-
-### How to Contribute:
-
-1. **Fork the Repository**: Create a personal copy of the repository on GitHub.
-2. **Create a Branch**: Develop your feature in a new branch:
-   ```bash
-   git checkout -b feature/your-feature
-   ```
-3. **Make Changes**: Test and document your updates.
-4. **Submit a Pull Request**: Propose your changes for review.
-
-## License
-
-This project is licensed under the terms outlined in the LICENSE file.
-
----
-
-For questions or support, please contact the project maintainers.
+Use feature branches and run checks for changed components before submitting a pull request. Keep credentials, live databases and Discord runtime state out of Git.

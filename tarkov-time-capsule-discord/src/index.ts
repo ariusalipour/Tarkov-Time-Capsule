@@ -15,7 +15,7 @@ const setupBot = async () => {
 
 	return createSlashCommandHandler({
 		applicationID: "1305653116443557958",
-		applicationSecret: "zYuPj8UeYBqnAnn1FptYwEM_rGpvwdMQ",
+		applicationSecret: "", // Legacy credential removed; use the NAS Discord service.
 		publicKey: "cb2c904a8b7da1ac15b97f7168f21091d76710fc87115ffabe4d143c2c9cc74a",
 		commands: [
 			[ pingCommand, pingHandler ],

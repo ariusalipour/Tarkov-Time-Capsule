@@ -1,0 +1,96 @@
+name: tarkov-time-capsule
+services:
+  app:
+    build: .
+    image: tarkov-time-capsule:local
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${HTTP_PORT:-3040}:3000"
+    environment:
+      SCHEDULER_ENABLED: "${SCHEDULER_ENABLED:-false}"
+      DATABASE_PATH: /data/tarkov-time-capsule.sqlite
+      STATIC_DIR: /app/public
+      PORT: "3000"
+      TZ: UTC
+    volumes:
+      - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 45s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  discord:
+    profiles: [discord]
+    build: ./nas-discord
+    image: tarkov-time-capsule-discord:local
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${DISCORD_HTTP_PORT:-3042}:3000"
+    environment:
+      API_BASE_URL: http://app:3000
+      PUBLIC_APP_URL: https://tarkovcapsule.mockachino.app
+      DISCORD_PUBLIC_KEY: "${DISCORD_PUBLIC_KEY:-525f4b8bbb3739b5bce2c31b46581682d138834427ce9a77d1dfcee3522880a7}"
+      DISCORD_COMPONENT_SECRET_FILE: /run/secrets/discord_component_secret
+      DISCORD_SUBSCRIPTIONS_DIR: /data/subscriptions
+      PORT: "3000"
+      TZ: UTC
+    secrets:
+      - discord_component_secret
+    volumes:
+      - ../discord-state/subscriptions:/data/subscriptions
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  discord-updates:
+    profiles: [discord-updates]
+    build: ./nas-discord-updates
+    image: tarkov-time-capsule-discord-updates:local
+    restart: unless-stopped
+    init: true
+    environment:
+      UPDATES_ENABLED: "${DISCORD_UPDATES_ENABLED:-false}"
+      UPDATES_DRY_RUN: "${DISCORD_UPDATES_DRY_RUN:-true}"
+      UPDATES_API_URL: http://app:3000
+      UPDATES_DAILY: "false"
+      UPDATES_CHANGES: "true"
+      UPDATES_DAILY_TIME: "${DISCORD_UPDATES_DAILY_TIME:-09:00}"
+      UPDATES_TIMEZONE: Europe/London
+      UPDATES_MODE: bot
+      DISCORD_BOT_TOKEN_FILE: /run/secrets/discord_bot_token
+      UPDATES_SUBSCRIPTIONS_DIR: /data/subscriptions
+      UPDATES_DELIVERY_DIR: /data/delivery
+    volumes:
+      - ../discord-state/subscriptions:/data/subscriptions:ro
+      - ../discord-state/delivery:/data/delivery
+    secrets:
+      - discord_bot_token
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+secrets:
+  discord_component_secret:
+    file: ../secrets/discord_component_secret
+  discord_bot_token:
+    file: ../secrets/discord_bot_token

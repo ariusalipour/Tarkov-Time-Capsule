@@ -1,311 +1,148 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Line } from 'react-chartjs-2';
-import {
-    Chart as ChartJS,
-    CategoryScale,
-    LinearScale,
-    PointElement,
-    LineElement,
-    Title,
-    Tooltip,
-    Legend,
-    TimeScale,
-} from 'chart.js';
-import 'chartjs-adapter-date-fns';
+import { Chart as ChartJS, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js';
+import { apiUrl, cleanRecords, initialFilters, nextDay, percent, queryUrl, recentRange, seriesFrom, utcTime } from './archiveData';
 
-ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    PointElement,
-    LineElement,
-    Title,
-    Tooltip,
-    Legend,
-    TimeScale
-);
+ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);
+async function readJson(url, signal) {
+  const response = await fetch(url, { signal });
+  if (!response.ok) throw new Error(`Request failed (${response.status})`);
+  return response.json();
+}
+function downloadCsv(records) {
+  const quote = value => `"${String(value).replace(/"/g, '""')}"`;
+  const rows = [['Map', 'Boss', 'Timestamp UTC', 'Spawn chance (%)'], ...records.map(row => [row.MapName, row.BossName, row.Timestamp, Number(row.Chance) * 100])];
+  const url = URL.createObjectURL(new Blob([rows.map(row => row.map(quote).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8;' }));
+  const anchor = document.createElement('a');
+  anchor.href = url; anchor.download = 'tarkov-spawn-history.csv'; anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
-const SpawnChanceGraph = () => {
-    const now = new Date();
-    const defaultEndDate = new Date(now);
-    defaultEndDate.setDate(now.getDate() + 1);
-    const defaultStartDate = new Date(now);
-    defaultStartDate.setDate(now.getDate() - 7);
+export default function SpawnChanceGraph() {
+  const [draft, setDraft] = useState(initialFilters);
+  const [applied, setApplied] = useState(initialFilters);
+  const [options, setOptions] = useState({ maps: ['Customs'], bosses: ['Reshala'] });
+  const [optionsError, setOptionsError] = useState(false);
+  const [optionsLoading, setOptionsLoading] = useState(true);
+  const [health, setHealth] = useState(null);
+  const [healthState, setHealthState] = useState('loading');
+  const [result, setResult] = useState({ state: 'loading', records: [], error: '' });
+  const [refresh, setRefresh] = useState(0);
+  const [metadataRefresh, setMetadataRefresh] = useState(0);
+  const [validation, setValidation] = useState('');
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(applied);
 
-    const formatDate = (date) => date.toISOString().split('T')[0];
+  useEffect(() => {
+    const controller = new AbortController();
+    setOptionsError(false);
+    setOptionsLoading(true);
+    Promise.all([readJson(apiUrl('api/maps'), controller.signal), readJson(apiUrl('api/bosses'), controller.signal)])
+      .then(([maps, bosses]) => { if (!controller.signal.aborted) setOptions({ maps: [...maps].sort(), bosses: [...bosses].sort() }); })
+      .catch(() => { if (!controller.signal.aborted) setOptionsError(true); })
+      .finally(() => { if (!controller.signal.aborted) setOptionsLoading(false); });
+    return () => controller.abort();
+  }, [metadataRefresh]);
 
-    const [mapName, setMapName] = useState('');
-    const [bossName, setBossName] = useState('');
-    const [startDate, setStartDate] = useState(formatDate(defaultStartDate));
-    const [endDate, setEndDate] = useState(formatDate(defaultEndDate));
-    const [chartData, setChartData] = useState(null);
-    const [maxYAxisValue, setMaxYAxisValue] = useState(100);
-    const [capPercentage, setCapPercentage] = useState(true);
-    const [bossOptions, setBossOptions] = useState([]);
-    const [mapOptions, setMapOptions] = useState([]);
-    const yAxisOptions = [10000, 1000, 100, 80, 60, 40, 20];
+  useEffect(() => {
+    const controller = new AbortController();
+    const load = () => readJson(apiUrl('healthz'), controller.signal)
+      .then(data => { if (!controller.signal.aborted) { setHealth(data); setHealthState('ready'); } })
+      .catch(() => { if (!controller.signal.aborted) setHealthState('error'); });
+    load();
+    const timer = setInterval(load, 60000);
+    return () => { controller.abort(); clearInterval(timer); };
+  }, [metadataRefresh]);
 
-    // Fetch Boss and Map Options
-    useEffect(() => {
-        const fetchBosses = async () => {
-            try {
-                const response = await fetch(`${process.env.REACT_APP_API_URL}api/bosses`);
-                if (!response.ok) throw new Error('Failed to fetch bosses');
-                const data = await response.json();
-                setBossOptions(data); // Assumes data is an array of boss names
-            } catch (error) {
-                console.error('Error fetching bosses:', error);
-            }
-        };
+  useEffect(() => {
+    const controller = new AbortController();
+    setResult({ state: 'loading', records: [], error: '' });
+    readJson(queryUrl(applied), controller.signal)
+      .then(records => {
+        if (!controller.signal.aborted) setResult({ state: 'ready', records: cleanRecords(records, applied), error: '' });
+      })
+      .catch(error => { if (!controller.signal.aborted) setResult({ state: 'error', records: [], error: error.message }); });
+    return () => controller.abort();
+  }, [applied, refresh]);
 
-        const fetchMaps = async () => {
-            try {
-                const response = await fetch(`${process.env.REACT_APP_API_URL}api/maps`);
-                if (!response.ok) throw new Error('Failed to fetch maps');
-                const data = await response.json();
-                setMapOptions(data); // Assumes data is an array of map names
-            } catch (error) {
-                console.error('Error fetching maps:', error);
-            }
-        };
+  const series = useMemo(() => seriesFrom(result.records), [result.records]);
+  const gapCount = series.reduce((total, item) => total + item.gaps, 0);
+  const outliers = result.records.some(record => Number(record.Chance) > 1 || Number(record.Chance) < 0);
+  const change = (key, value) => { setDraft(current => ({ ...current, [key]: value })); setValidation(''); };
+  const apply = event => {
+    event.preventDefault();
+    if (!draft.startDate || !draft.endDate || draft.startDate > draft.endDate) {
+      setValidation('Choose a valid date range. The end date must be on or after the start date.'); return;
+    }
+    setValidation('');
+    setFiltersExpanded(false);
+    if (!dirty) setRefresh(current => current + 1);
+    else setApplied({ ...draft });
+  };
+  const reset = () => { const defaults = initialFilters(); setDraft(defaults); setApplied(defaults); setValidation(''); };
+  const latest = result.records[result.records.length - 1];
+  const db = healthState === 'ready' ? health?.database : null;
+  const freshness = healthState === 'loading' ? 'Checking archive' : !db ? 'Status unavailable' : db.stale ? 'Collection delayed' : 'Archive up to date';
+  const chartData = { datasets: series.map(item => ({ label: item.label, data: item.data, borderColor: item.color, backgroundColor: item.color, borderWidth: 2, pointRadius: context => {
+    const i = context.dataIndex;
+    return item.data.length === 1 || item.data[i - 1]?.y === null || item.data[i + 1]?.y === null || i === item.data.length - 1 ? 3 : 0;
+  }, pointHoverRadius: 5, pointHitRadius: 14, tension: 0, stepped: 'after', spanGaps: false })) };
+  const chartOptions = {
+    responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
+    interaction: { mode: 'nearest', intersect: false },
+    plugins: { legend: { display: false }, tooltip: { backgroundColor: '#202632', titleColor: '#ffffff', bodyColor: '#ffffff', padding: 12, displayColors: true, callbacks: { title: items => utcTime(items[0]?.parsed.x), label: item => `${item.dataset.label}: ${percent(item.parsed.y)}` } } },
+    scales: {
+      x: { type: 'linear', min: Date.parse(`${applied.startDate}T00:00:00Z`), max: Date.parse(`${nextDay(applied.endDate)}T00:00:00Z`) - 1, grid: { color: '#303946', drawTicks: false }, border: { display: false }, ticks: { color: '#a5afbf', maxTicksLimit: 6, maxRotation: 0, padding: 12, callback: value => new Intl.DateTimeFormat('en-GB', { ...(Date.parse(nextDay(applied.endDate)) - Date.parse(applied.startDate) <= 172800000 ? { hour: '2-digit', minute: '2-digit', hour12: false } : { month: 'short', day: 'numeric' }), timeZone: 'UTC' }).format(new Date(value)) } },
+      y: { min: outliers ? undefined : 0, suggestedMax: 100, border: { display: false }, grid: { color: '#303946', drawTicks: false }, ticks: { color: '#a5afbf', padding: 12, maxTicksLimit: 6, callback: value => `${value}%` } },
+    },
+  };
 
-        fetchBosses();
-        fetchMaps();
-    }, []);
+  return <div className="archive-app">
+    <a className="skip-link" href="#history">Skip to history</a>
+    <header className="masthead">
+      <a className="brand" href="/" aria-label="Tarkov Time Capsule home">Tarkov Time Capsule</a>
+      <div className="masthead-end"><span className="mode-tag">PvP · Regular</span><span className={`header-status ${db && !db.stale ? 'current' : ''}`}><span className="status-dot" />{freshness}</span></div>
+    </header>
+    <main>
+      <section className="page-intro" aria-labelledby="page-title">
+        <div><h1 id="page-title">Boss spawn history</h1><p className="intro-copy">Explore recorded spawn chances by map, boss and date.</p></div>
+        <aside className="collection-status" aria-label="Collection status"><div className={`mobile-collection-status ${db && !db.stale ? 'current' : ''}`}><span className="status-dot" />{freshness}</div><span>Latest collection</span><strong>{db?.latestTimestamp ? utcTime(db.latestTimestamp) : '—'}</strong><p>{healthState === 'error' ? 'Status unavailable. History is still available.' : health?.collection?.enabled ? 'Collected hourly' : healthState === 'ready' ? 'Automatic collection is paused' : 'Checking collection status…'}</p>{healthState === 'error' && <button className="text-button" onClick={() => setMetadataRefresh(value => value + 1)}>Check again</button>}</aside>
+      </section>
+      <div className="workbench">
+        <aside className="query-rail"><div className="section-heading"><h2>Filters</h2><button className="mobile-filter-toggle" type="button" aria-expanded={filtersExpanded} aria-controls="query-controls" onClick={() => setFiltersExpanded(value => !value)}>{filtersExpanded ? 'Hide filters' : 'Edit filters'}</button></div>
+          <p className="mobile-query-summary">{applied.mapName || 'All maps'} · {applied.bossName || 'All bosses'}<span>{applied.startDate} → {applied.endDate}</span></p>
+          <div id="query-controls" className={`query-body ${filtersExpanded ? 'expanded' : ''}`}>
+          <form onSubmit={apply}>
+            <div className="filter-field"><label htmlFor="map">Map</label><select id="map" disabled={optionsLoading} value={draft.mapName} onChange={event => change('mapName', event.target.value)}><option value="">All maps</option>{options.maps.map(name => <option key={name}>{name}</option>)}</select></div>
+            <div className="filter-field"><label htmlFor="boss">Boss</label><select id="boss" disabled={optionsLoading} value={draft.bossName} onChange={event => change('bossName', event.target.value)}><option value="">All bosses</option>{options.bosses.map(name => <option key={name}>{name}</option>)}</select></div>
+            {optionsLoading && <p className="field-help" role="status">Loading map and boss lists…</p>}
+            {optionsError && <p className="inline-error">Filter lists could not load. <button type="button" className="text-button" onClick={() => setMetadataRefresh(value => value + 1)}>Retry</button></p>}
+            <fieldset><legend>Quick range</legend><div className="range-buttons">{[7, 30, 90].map(days => { const range = recentRange(days); return <button key={days} type="button" aria-pressed={draft.startDate === range.startDate && draft.endDate === range.endDate} onClick={() => { setDraft(current => ({ ...current, ...range })); setValidation(''); }}>{days} days</button>; })}</div></fieldset>
+            <div className="date-fields"><div><label htmlFor="start">From</label><input id="start" type="date" required value={draft.startDate} onChange={event => change('startDate', event.target.value)} /></div><div><label htmlFor="end">Through</label><input id="end" type="date" required value={draft.endDate} onChange={event => change('endDate', event.target.value)} /></div></div>
 
-    const prepareChartData = useCallback(
-        (apiData) => {
-            if (!apiData) return;
-
-            const shouldGroupByBoss = mapName !== '' || (mapName !== '' && bossName !== '');
-            const shouldGroupByMap = bossName !== '' && mapName === '';
-            const shouldGroupByBoth = mapName === '' && bossName === '';
-
-            const groupedData = {};
-
-            apiData.forEach((item) => {
-                let groupKey = '';
-
-                if (shouldGroupByBoss) {
-                    groupKey = item.BossName;
-                } else if (shouldGroupByMap) {
-                    groupKey = item.MapName;
-                } else if (shouldGroupByBoth) {
-                    groupKey = `${item.MapName} - ${item.BossName}`;
-                }
-
-                if (!groupedData[groupKey]) {
-                    groupedData[groupKey] = {
-                        label: groupKey,
-                        data: [],
-                        backgroundColor: `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(
-                            Math.random() * 255
-                        )}, ${Math.floor(Math.random() * 255)}, 0.5)`,
-                        borderColor: `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(
-                            Math.random() * 255
-                        )}, ${Math.floor(Math.random() * 255)}, 1)`,
-                        fill: false,
-                    };
-                }
-
-                let spawnChancePercentage = item.Chance * 100;
-                if (capPercentage && spawnChancePercentage > 100) {
-                    spawnChancePercentage = 100;
-                }
-
-                groupedData[groupKey].data.push({
-                    x: new Date(item.Timestamp),
-                    y: spawnChancePercentage,
-                });
-            });
-
-            setChartData({
-                datasets: Object.values(groupedData),
-            });
-        },
-        [mapName, bossName, capPercentage]
-    );
-
-    const fetchData = useCallback(async () => {
-        try {
-            let url = `${process.env.REACT_APP_API_URL}api/spawnchance?`;
-            if (mapName) url += `mapName=${mapName}&`;
-            if (bossName) url += `bossName=${bossName}&`;
-            if (startDate) url += `startDate=${startDate}&`;
-            if (endDate) url += `endDate=${endDate}&`;
-
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
-
-            const result = await response.json();
-            prepareChartData(result);
-        } catch (error) {
-            console.error('Error fetching data:', error);
-        }
-    }, [mapName, bossName, startDate, endDate, prepareChartData]);
-
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
-    const calculateDateRange = (start, end) => {
-        const startDate = new Date(start);
-        const endDate = new Date(end);
-        const timeDiff = Math.abs(endDate - startDate);
-        return Math.ceil(timeDiff / (1000 * 3600 * 24)); // Convert milliseconds to days
-    };
-
-    const dateRange = calculateDateRange(startDate, endDate);
-
-    return (
-        <div style={{ backgroundColor: '#121212', color: '#FFFFFF', minHeight: '100vh', padding: '20px' }}>
-            <h1>Tarkov Spawn Chance Data</h1>
-            <div style={{ marginBottom: '20px' }}>
-                <label style={{ marginRight: '15px' }}>
-                    Map Name:
-                    <select
-                        value={mapName}
-                        onChange={(e) => setMapName(e.target.value)}
-                        style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
-                    >
-                        <option value="">Select Map</option>
-                        {mapOptions.map((map, index) => (
-                            <option key={index} value={map}>
-                                {map}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                <label style={{ marginRight: '15px' }}>
-                    Boss Name:
-                    <select
-                        value={bossName}
-                        onChange={(e) => setBossName(e.target.value)}
-                        style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
-                    >
-                        <option value="">Select Boss</option>
-                        {bossOptions.map((boss, index) => (
-                            <option key={index} value={boss}>
-                                {boss}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                <label style={{ marginRight: '15px' }}>
-                    Start Date:
-                    <input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
-                    />
-                </label>
-                <label style={{ marginRight: '15px' }}>
-                    End Date:
-                    <input
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
-                    />
-                </label>
-                <div style={{ marginBottom: '15px', marginTop: '15px' }}>
-                    <label style={{ marginRight: '15px' }}>
-                        Cap Spawn Chance at 100%:
-                        <input
-                            type="checkbox"
-                            checked={capPercentage}
-                            onChange={(e) => {
-                                setCapPercentage(e.target.checked);
-                                if (e.target.checked && maxYAxisValue > 100) {
-                                    setMaxYAxisValue(100); // If capped, reset max value to 100 if it's over 100
-                                }
-                            }}
-                            style={{ marginLeft: '10px' }}
-                        />
-                    </label>
-                    <label style={{ marginRight: '15px' }}>
-                        Y-Axis Max Value:
-                        <select
-                            value={maxYAxisValue}
-                            onChange={(e) => setMaxYAxisValue(parseInt(e.target.value))}
-                            style={{ backgroundColor: '#333333', color: '#FFFFFF', marginLeft: '5px' }}
-                            disabled={capPercentage && maxYAxisValue > 100} // Disable selecting values > 100 if cap is checked
-                        >
-                            {yAxisOptions
-                                .filter((value) => !capPercentage || value <= 100) // Filter out values greater than 100 if cap is checked
-                                .map((value, index) => (
-                                    <option key={index} value={value}>
-                                        {value}
-                                    </option>
-                                ))}
-                        </select>
-                    </label>
-                </div>
-            </div>
-
-            {chartData && (
-                <div>
-                    <Line
-                        data={chartData}
-                        options={{
-                            responsive: true,
-                            plugins: {
-                                legend: {
-                                    position: 'top',
-                                    labels: {
-                                        color: '#FFFFFF', // Legend text color
-                                    },
-                                },
-                                title: {
-                                    display: true,
-                                    text: 'Spawn Chances Over Time',
-                                    color: '#FFFFFF', // Title text color
-                                },
-                                tooltip: {
-                                    titleColor: '#FFFFFF',
-                                    bodyColor: '#FFFFFF',
-                                    backgroundColor: '#333333',
-                                },
-                            },
-                            scales: {
-                                x: {
-                                    type: 'time', // Time scale for the x-axis
-                                    time: {
-                                        unit: dateRange > 3 ? 'day' : 'hour', // Adjust the unit to display timestamps in detail
-                                        tooltipFormat: 'yyyy-MM-dd HH:mm:ss', // Display full timestamp in tooltip
-                                        displayFormats: {
-                                            hour: 'HH:mm', // Display format for hours
-                                            day: 'MMM dd', // Display format for days
-                                        },
-                                    },
-                                    title: {
-                                        display: true,
-                                        text: 'Timestamp',
-                                        color: '#FFFFFF', // X-axis title color
-                                    },
-                                    ticks: {
-                                        color: '#FFFFFF', // X-axis labels color
-                                    },
-                                },
-                                y: {
-                                    title: {
-                                        display: true,
-                                        text: 'Spawn Chance (%)',
-                                        color: '#FFFFFF', // Y-axis title color
-                                    },
-                                    min: 0,
-                                    max: capPercentage && maxYAxisValue > 100 ? 100 : maxYAxisValue, // Set max to 100 if cap is checked, otherwise use maxYAxisValue
-                                    ticks: {
-                                        color: '#FFFFFF', // Y-axis labels color
-                                    },
-                                },
-                            },
-                        }}
-                    />
-                </div>
-            )}
-        </div>
-    );
-};
-
-export default SpawnChanceGraph;
+            {validation && <p className="inline-error" role="alert">{validation}</p>}
+            <button className="apply-button" type="submit">Apply filters</button>
+            <div className="filter-bottom"><span role="status">{dirty ? 'Unapplied changes' : 'Filters applied'}</span><button className="text-button" type="button" onClick={reset}>Reset</button></div>
+          </form>
+          </div>
+        </aside>
+        <section className="results" id="history" aria-labelledby="history-title" aria-busy={result.state === 'loading'}>
+          <div className="results-heading"><div><h2 id="history-title">{applied.bossName || 'All bosses'} <span>· {applied.mapName || 'All maps'}</span></h2><p className="applied-range">{applied.startDate} <span>→</span> {applied.endDate} <span>· UTC</span></p></div><button className="export-button" aria-label="Export CSV" onClick={() => downloadCsv(result.records)} disabled={!result.records.length || result.state !== 'ready'}>↓ <span>Export CSV</span></button></div>
+          {result.state === 'loading' && <div className="state-panel" role="status"><span className="loading-bars" aria-hidden="true"><i /><i /><i /><i /><i /></span><h3>Loading history</h3><p>Finding observations for this view…</p></div>}
+          {result.state === 'error' && <div className="state-panel error-panel" role="alert"><span className="state-symbol">!</span><h3>History couldn’t be loaded</h3><p>{result.error}. Your filters are saved. Try the request again.</p><button className="secondary-button" onClick={() => setRefresh(value => value + 1)}>Retry request</button></div>}
+          {result.state === 'ready' && !result.records.length && <div className="state-panel"><span className="state-symbol">∅</span><h3>No observations in this view</h3><p>Try a wider time window or a different map and boss.<br />No data does not mean a 0% spawn chance.</p><button className="secondary-button" onClick={() => { const range = recentRange(90); setDraft(current => ({ ...current, ...range })); setApplied(current => ({ ...current, ...range })); }}>Explore the last 90 days</button></div>}
+          {result.state === 'ready' && result.records.length > 0 && <>
+            <div className="view-stats"><div><span className="field-caption">{series.length === 1 ? 'Latest in selected dates' : 'Series'}</span><strong>{series.length === 1 ? percent(Number(latest.Chance) * 100) : series.length}<span>{series.length === 1 ? 'spawn chance' : 'map / boss combinations'}</span></strong></div><div><span className="field-caption">Observations</span><strong>{result.records.length.toLocaleString('en-GB')}<span>{utcTime(latest.Timestamp)}</span></strong></div></div>
+            <div className="chart-topline"><span>Spawn chance</span><span>All times UTC</span></div>
+            <div className="chart-wrap"><Line data={chartData} options={chartOptions} role="img" aria-label={`Spawn chance history for ${series.length} map and boss combinations. Exact latest values and historical ranges are in the table below.`} /></div>
+            <div className="chart-caption"><span>All times UTC · each point is a recorded observation</span><span>{gapCount ? `${gapCount} collection ${gapCount === 1 ? 'gap' : 'gaps'} in this view` : 'Gaps over 6 hours break the line'}</span></div>
+            {outliers && <p className="data-notice">This view includes source values outside 0–100%. Original values are shown without clipping.</p>}
+            <div className="table-heading"><h3>Latest observations</h3><span>Within selected dates</span></div>
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="Latest observations table"><table><thead><tr><th scope="col">Map / boss</th><th scope="col">Latest chance</th><th scope="col">Range in window</th><th scope="col">Last observed (UTC)</th></tr></thead><tbody>{series.map(item => <tr key={item.label}><th scope="row"><span className="series-dot" style={{ backgroundColor: item.color }} /><span>{item.latest.BossName}<small>{item.latest.MapName}</small></span></th><td className="chance-cell">{percent(Number(item.latest.Chance) * 100)}</td><td>{percent(item.min)} <span className="muted">—</span> {percent(item.max)}</td><td className="timestamp-cell">{utcTime(item.latest.Timestamp).replace(' UTC', '')}</td></tr>)}</tbody></table></div>
+          </>}
+        </section>
+      </div>
+      <footer><span>An independent archive of PvP spawn settings</span><span>Source: <a href="https://tarkov.dev" target="_blank" rel="noreferrer">tarkov.dev ↗</a><span className="footer-slash">/</span>Not affiliated with Battlestate Games</span></footer>
+    </main>
+  </div>;
+}

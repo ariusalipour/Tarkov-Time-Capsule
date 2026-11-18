@@ -1,0 +1,57 @@
+[
+  {
+    "name": "boss",
+    "description": "Latest archived spawn chances for a boss",
+    "options": [
+      {
+        "type": 3,
+        "name": "name",
+        "description": "Boss name",
+        "required": true,
+        "autocomplete": true
+      }
+    ]
+  },
+  {
+    "name": "bosses",
+    "description": "Browse the latest archived boss spawn chances"
+  },
+  {
+    "name": "status",
+    "description": "Archive freshness and collection status"
+  },
+  {
+    "name": "ping",
+    "description": "Check whether the bot is responding"
+  },
+  {
+    "name": "hello",
+    "description": "Help using Tarkov Time Capsule"
+  },
+  {
+    "name": "updates",
+    "description": "Set up spawn-chance-change updates for this server",
+    "default_member_permissions": "32",
+    "dm_permission": false,
+    "contexts": [
+      0
+    ],
+    "options": [
+      {
+        "type": 1,
+        "name": "enable",
+        "description": "Post spawn-chance changes in this channel"
+      },
+      {
+        "type": 1,
+        "name": "disable",
+        "description": "Stop change updates for this server"
+      },
+      {
+        "type": 1,
+        "name": "status",
+        "description": "Show this server\u2019s change update settings"
+      }
+    ]
+  }
+]

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "deploy": "wrangler deploy",
+    "deploy": "node -e \"console.error('Cloudflare API retired. Deploy the NAS Compose service; see NAS-MIGRATION.md.'); process.exit(1)\"",
     "dev": "wrangler dev --test-scheduled",
     "start": "wrangler dev --test-scheduled",
     "cf-typegen": "wrangler types"

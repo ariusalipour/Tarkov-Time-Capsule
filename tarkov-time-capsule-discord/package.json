@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "deploy": "wrangler deploy",
+    "deploy": "node -e \"console.error('Legacy Discord Worker deployment disabled. Use the NAS Discord service.'); process.exit(1)\"",
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "test": "vitest",

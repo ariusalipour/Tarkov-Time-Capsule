@@ -128,3 +128,16 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# NAS runtime output and persistent history
+/data/
+/backups/
+/nas/dist/
+
+# Local secrets and Discord runtime state
+/secrets/
+/discord-state/
+/privacy-requests/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

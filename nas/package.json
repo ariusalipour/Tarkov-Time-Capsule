@@ -1,0 +1,13 @@
+{
+  "name": "tarkov-time-capsule-nas",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13.0" },
+  "scripts": {
+    "build": "esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server.mjs && esbuild ../tarkov-time-capsule-api/src/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/api.mjs",
+    "start": "node dist/server.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": { "graphql-request": "^7.1.2" },
+  "devDependencies": { "esbuild": "^0.25.0" }
+}
