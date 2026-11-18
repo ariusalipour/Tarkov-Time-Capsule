@@ -1,5 +1,5 @@
 export const DAY = 86400000;
-export const apiUrl = path => `${(process.env.REACT_APP_API_URL || '/').replace(/\/$/, '')}/${path}`;
+export const apiUrl = path => `${(import.meta.env.VITE_API_URL || '/').replace(/\/$/, '')}/${path}`;
 export const dateOnly = date => date.toISOString().slice(0, 10);
 export function recentRange(days, now = new Date()) {
   const end = new Date(`${dateOnly(now)}T00:00:00Z`);
@@ -55,4 +55,16 @@ export const percent = value => `${Number(value).toLocaleString('en-GB', { maxim
 export function utcTime(value) {
   if (!value || !Number.isFinite(new Date(value).getTime())) return 'Unavailable';
   return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false }).format(new Date(value)) + ' UTC';
+}
+
+// Quoting alone does not stop spreadsheet formula evaluation of untrusted text.
+export function csvCell(value) {
+  let text = String(value);
+  if (typeof value !== 'number' && /^[\s\u0000-\u001f]*[=+@-]/.test(text)) text = "'" + text;
+  if (/^[\t\r\n]/.test(text)) text = "'" + text;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+export function recordsCsv(records) {
+  const rows = [['Map', 'Boss', 'Timestamp UTC', 'Spawn chance (%)'], ...records.map(row => [row.MapName, row.BossName, row.Timestamp, Number(row.Chance) * 100])];
+  return rows.map(row => row.map(csvCell).join(',')).join('\r\n');
 }

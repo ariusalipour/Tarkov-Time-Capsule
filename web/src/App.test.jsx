@@ -1,10 +1,11 @@
+import { vi } from 'vitest';
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
-import { cleanRecords, nextDay, queryUrl, recentRange, seriesFrom, utcTime } from './archiveData';
+import { cleanRecords, csvCell, recordsCsv, nextDay, queryUrl, recentRange, seriesFrom, utcTime } from './archiveData';
 
-jest.mock('react-chartjs-2', () => ({ Line: props => <div role="img" aria-label={props['aria-label']} /> }));
-jest.mock('chart.js', () => ({ Chart: { register: jest.fn() } }));
+vi.mock('react-chartjs-2', () => ({ Line: props => <div role="img" aria-label={props['aria-label']} /> }));
+vi.mock('chart.js', () => ({ Chart: { register: vi.fn() }, LinearScale: {}, PointElement: {}, LineElement: {}, Tooltip: {}, Legend: {} }));
 const json = data => Promise.resolve({ ok: true, json: () => Promise.resolve(data) });
 const record = (Timestamp, Chance = 0.3, BossName = 'Reshala', MapName = 'Customs') => ({ Timestamp, Chance, BossName, MapName });
 const window = { startDate: '2026-11-01', endDate: '2026-11-18' };
@@ -14,7 +15,7 @@ const metadata = url => {
   if (url.includes('healthz')) return json({ database: { latestTimestamp: '2026-11-18T11:00:00Z', stale: false }, collection: { enabled: true } });
   return null;
 };
-afterEach(() => { jest.restoreAllMocks(); delete global.fetch; });
+afterEach(() => { vi.restoreAllMocks(); delete global.fetch; });
 
 test('inclusive UTC dates become a next-day API boundary across year and leap-day changes', () => {
   expect(nextDay('2024-02-29')).toBe('2024-03-01');
@@ -41,7 +42,7 @@ test('series retain original outliers and break multi-month collection gaps', ()
 });
 test('map and boss edits wait for Apply filters and request gets aborted when replaced', async () => {
   const requests = [];
-  global.fetch = jest.fn((url, options) => {
+  global.fetch = vi.fn((url, options) => {
     const response = metadata(url); if (response) return response;
     requests.push({ url, signal: options.signal }); return json([]);
   });
@@ -62,7 +63,7 @@ test('map and boss edits wait for Apply filters and request gets aborted when re
 test('older request cannot replace a newly applied result even if its transport ignores abort', async () => {
   let resolveOld;
   let queries = 0;
-  global.fetch = jest.fn(url => metadata(url) || (++queries === 1 ? new Promise(resolve => { resolveOld = resolve; }) : json([])));
+  global.fetch = vi.fn(url => metadata(url) || (++queries === 1 ? new Promise(resolve => { resolveOld = resolve; }) : json([])));
   render(<App />);
   expect(screen.getByText('Loading history')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '30 days' }));
@@ -74,7 +75,7 @@ test('older request cannot replace a newly applied result even if its transport 
 });
 test('request failure shows retry and recovers to an honest empty state', async () => {
   let queries = 0;
-  global.fetch = jest.fn(url => metadata(url) || (++queries === 1 ? Promise.resolve({ ok: false, status: 503 }) : json([])));
+  global.fetch = vi.fn(url => metadata(url) || (++queries === 1 ? Promise.resolve({ ok: false, status: 503 }) : json([])));
   render(<App />);
   await screen.findByText('History couldn’t be loaded');
   fireEvent.click(screen.getByRole('button', { name: /Retry request/ }));
@@ -83,7 +84,7 @@ test('request failure shows retry and recovers to an honest empty state', async 
   expect(screen.getByRole('button', { name: 'Export CSV' })).toBeDisabled();
 });
 test('invalid date order prevents a query and health failures do not block history', async () => {
-  global.fetch = jest.fn(url => url.includes('healthz') ? Promise.reject(new Error('Unavailable')) : metadata(url) || json([]));
+  global.fetch = vi.fn(url => url.includes('healthz') ? Promise.reject(new Error('Unavailable')) : metadata(url) || json([]));
   render(<App />);
   await screen.findAllByText('Status unavailable');
   await screen.findByText('No observations in this view');
@@ -93,4 +94,23 @@ test('invalid date order prevents a query and health failures do not block histo
   fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
   expect(screen.getByRole('alert')).toHaveTextContent('end date must be on or after');
   expect(global.fetch.mock.calls.filter(([url]) => url.includes('spawnchance'))).toHaveLength(before);
+});
+
+test('CSV export neutralises spreadsheet formulas and escapes embedded delimiters', () => {
+  for (const text of ['=HYPERLINK("https://example.com")', '+cmd', '-cmd', '@SUM(1)', ' =1', '\t=1', '\r=1']) {
+    expect(csvCell(text).startsWith('"\'')).toBe(true);
+  }
+  expect(csvCell('Customs, "east"')).toBe('"Customs, ""east"""');
+  expect(csvCell(-5)).toBe('"-5"');
+  expect(recordsCsv([record('2026-11-18T12:00:00Z', 0.3, '=1+1')])).toContain('"\'=1+1"');
+});
+test.each([
+  [413, 'Choose a shorter date range'],
+  [400, 'Check the dates and filter values'],
+  [429, 'Wait a moment before retrying'],
+])('API %s errors give actionable guidance and keep filters editable', async (status, message) => {
+  global.fetch = vi.fn(url => metadata(url) || Promise.resolve({ ok: false, status }));
+  render(<App />);
+  expect(await screen.findByRole('alert')).toHaveTextContent(message);
+  expect(screen.getByRole('button', { name: 'Apply filters' })).toBeEnabled();
 });

@@ -5,6 +5,10 @@ services:
     image: tarkov-time-capsule:local
     restart: unless-stopped
     init: true
+    cpus: 1.0
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 128
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${HTTP_PORT:-3040}:3000"
     environment:
@@ -13,6 +17,7 @@ services:
       STATIC_DIR: /app/public
       PORT: "3000"
       TZ: UTC
+      NODE_OPTIONS: --max-old-space-size=256
     volumes:
       - ./data:/data
     read_only: true
@@ -34,6 +39,10 @@ services:
     image: tarkov-time-capsule-discord:local
     restart: unless-stopped
     init: true
+    cpus: 0.5
+    mem_limit: 128m
+    memswap_limit: 128m
+    pids_limit: 64
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${DISCORD_HTTP_PORT:-3042}:3000"
     environment:
@@ -42,12 +51,15 @@ services:
       DISCORD_PUBLIC_KEY: "${DISCORD_PUBLIC_KEY:-525f4b8bbb3739b5bce2c31b46581682d138834427ce9a77d1dfcee3522880a7}"
       DISCORD_COMPONENT_SECRET_FILE: /run/secrets/discord_component_secret
       DISCORD_SUBSCRIPTIONS_DIR: /data/subscriptions
+      DISCORD_REPLAY_DIR: /data/replays
       PORT: "3000"
       TZ: UTC
+      NODE_OPTIONS: --max-old-space-size=64
     secrets:
       - discord_component_secret
     volumes:
       - ../discord-state/subscriptions:/data/subscriptions
+      - ../discord-state/replays:/data/replays
     read_only: true
     tmpfs:
       - /tmp:size=16m,noexec,nosuid
@@ -64,11 +76,16 @@ services:
     image: tarkov-time-capsule-discord-updates:local
     restart: unless-stopped
     init: true
+    cpus: 0.5
+    mem_limit: 128m
+    memswap_limit: 128m
+    pids_limit: 64
     environment:
       UPDATES_ENABLED: "${DISCORD_UPDATES_ENABLED:-false}"
       UPDATES_DRY_RUN: "${DISCORD_UPDATES_DRY_RUN:-true}"
       UPDATES_API_URL: http://app:3000
       DISCORD_BOT_TOKEN_FILE: /run/secrets/discord_bot_token
+      NODE_OPTIONS: --max-old-space-size=64
       UPDATES_SUBSCRIPTIONS_DIR: /data/subscriptions
       UPDATES_DELIVERY_DIR: /data/delivery
     volumes:

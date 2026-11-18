@@ -4,7 +4,20 @@ const headers = {
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
-const json = value => new Response(JSON.stringify(value), { headers });
+const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers });
+export const MAX_ROWS = 10000;
+export const MAX_QUERY_LENGTH = 2048;
+
+function parseDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z)?$/.test(value)) return NaN;
+  const milliseconds = Date.parse(value);
+  if (!Number.isFinite(milliseconds)) return NaN;
+  const normalized = new Date(milliseconds).toISOString();
+  // Date.parse normalizes invalid days (e.g. February 30); reject those too.
+  if (normalized.slice(0, 10) !== value.slice(0, 10)) return NaN;
+  if (value.includes('T') && normalized.slice(0, 19) !== value.slice(0, 19)) return NaN;
+  return milliseconds / 1000;
+}
 
 export async function handleBossListRequest(db) {
   const titleCase = name => name.replace(/\w+/g, word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
@@ -34,11 +47,22 @@ function groupRows(rows, groupBy) {
 }
 
 function spawnChanceResponse(request, db, latest) {
+  if (new URL(request.url).search.length > MAX_QUERY_LENGTH) return json({ error: 'Query is too long.' }, 400);
   const params = new Map();
   new URL(request.url).searchParams.forEach((value, key) => params.set(key.toLowerCase(), value));
+  for (const name of ['mapname', 'bossname']) {
+    if ((params.get(name)?.length || 0) > 100) return json({ error: 'Filters must be at most 100 characters.' }, 400);
+  }
+  for (const name of ['startdate', 'enddate']) {
+    if (params.has(name) && !Number.isFinite(parseDate(params.get(name)))) return json({ error: 'Dates must be valid ISO dates or UTC timestamps.' }, 400);
+  }
   const now = Date.now() / 1000;
-  const start = latest ? now - 3600 : params.get('startdate') ? Date.parse(params.get('startdate')) / 1000 : now - 7 * 86400;
-  const end = latest || !params.get('enddate') ? now : Date.parse(params.get('enddate')) / 1000;
+  const requestedStart = params.has('startdate') ? parseDate(params.get('startdate')) : undefined;
+  const requestedEnd = params.has('enddate') ? parseDate(params.get('enddate')) : undefined;
+  if (requestedStart !== undefined && requestedEnd !== undefined && requestedStart > requestedEnd) return json({ error: 'startDate must not be after endDate.' }, 400);
+  const start = latest ? now - 3600 : requestedStart ?? now - 7 * 86400;
+  const end = latest ? now : requestedEnd ?? now;
+  if (start > end) return json({ error: 'startDate must not be after endDate.' }, 400);
   let query = `SELECT Maps.MapName, Bosses.BossName, SpawnChances.Chance, Timestamps.Timestamp
     FROM SpawnChances
     JOIN Maps ON SpawnChances.MapID = Maps.MapID
@@ -53,7 +77,10 @@ function spawnChanceResponse(request, db, latest) {
       bindings.push(value);
     }
   }
-  const rows = db.prepare(query).all(...bindings);
+  // The extra row detects overflow without loading the complete archive into memory.
+  query += ' LIMIT ?';
+  const rows = db.prepare(query).all(...bindings, MAX_ROWS + 1);
+  if (rows.length > MAX_ROWS) return json({ error: 'Too many observations; choose a shorter date range or filter by boss/map.' }, 413);
   for (const row of rows) row.Timestamp = new Date(row.Timestamp * 1000).toISOString();
   return json(groupRows(rows, params.get('groupby')));
 }

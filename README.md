@@ -17,7 +17,7 @@ The app container serves both the web build and API. The bot runs an interaction
 
 ## Run
 
-Use Node 24, Python 3 for backup scripts, and Docker Compose.
+Use Node 24.15 or newer, Python 3 for backup scripts, and Docker Compose.
 
 Copy `.env.example` to `.env`. Create `data/` owned by UID/GID 1000, then run:
 
@@ -27,7 +27,7 @@ docker compose up -d --build app
 
 Collection is disabled by default. Set `SCHEDULER_ENABLED=true` after checking the database and ensuring only one collector runs. Collection occurs each UTC hour. `/healthz` reports counts, latest observation and collector status; check freshness as well as HTTP status.
 
-For local web development, run `npm ci` and `npm start` in `web/`, with `REACT_APP_API_URL` pointing to the API. In `api/`, run `npm ci`, `npm run build`, then `DATABASE_PATH=../data/tarkov-time-capsule.sqlite STATIC_DIR=../web/build npm start`.
+For local web development, run `npm ci` and `npm start` in `web/`, with `VITE_API_URL` pointing to the API. In `api/`, run `npm ci`, `npm run build`, then `DATABASE_PATH=../data/tarkov-time-capsule.sqlite STATIC_DIR=../web/dist npm start`.
 
 ## API
 
@@ -37,11 +37,15 @@ For local web development, run `npm ci` and `npm start` in `web/`, with `REACT_A
 - `GET /api/latestspawnchance` — observations from the preceding hour.
 - `GET /healthz`
 
+History responses contain at most **10,000 observations**. Larger queries return `413` with guidance to shorten the date range or select a map/boss; results are never silently truncated. Invalid dates, reversed ranges, oversized filters and long queries return `400`. Dates accept `YYYY-MM-DD` or an ISO UTC timestamp ending in `Z`.
+
+API reads have a shared budget of 120 requests/minute (burst 30) and a socket-address budget of 60/minute (burst 15). `429` includes `Retry-After`. Reverse-proxy users share an address budget; arbitrary forwarded headers are not trusted. Add client-aware rate limits at your trusted HTTPS edge if needed. `/healthz` caches expensive counts while recalculating freshness on each read.
+
 Missing observations do not represent zero spawn chances. Archive timestamps are UTC and chances are stored as fractions.
 
 ## Discord
 
-Set `DISCORD_PUBLIC_KEY` for your application. Place a cryptographically random component secret (at least 32 characters) in `../secrets/discord_component_secret` and the bot token in `../secrets/discord_bot_token`. Restrict access while allowing container UID 1000 to read them. Create `../discord-state/subscriptions` and `../discord-state/delivery` writable by UID 1000.
+Set `DISCORD_PUBLIC_KEY` for your application. Place a cryptographically random component secret (at least 32 characters) in `../secrets/discord_component_secret` and the bot token in `../secrets/discord_bot_token`. Restrict access while allowing container UID 1000 to read them. Create `../discord-state/subscriptions`, `../discord-state/delivery` and `../discord-state/replays` writable by UID 1000. The receiver persists short-lived replay records so previously accepted settings commands cannot run again after a restart.
 
 ```sh
 docker compose --profile discord --profile discord-updates up -d --build
@@ -65,8 +69,12 @@ npm test --prefix api
 npm run build --prefix api
 node --test discord/test.mjs discord/updates/updates.test.mjs
 npm ci --prefix web
-CI=true npm test --prefix web -- --watchAll=false --runInBand
+npm test --prefix web
 npm run build --prefix web
 ```
+
+Compose limits the app to 512 MiB and one CPU, and each bot process to 128 MiB and half a CPU, with PID and Node heap limits. Adjust deliberately after measuring usage. Production images use a pinned minimal Node runtime without a shell, npm or build tools; use `/nodejs/bin/node` for deliberate runtime diagnostics. The app sends a restrictive Content Security Policy, framing protection, `nosniff` and a referrer policy. Terminate HTTPS and configure HSTS at the public edge.
+
+GitHub Actions runs these checks, dependency audits and container builds on changes and weekly. Dependabot proposes npm, image and Actions updates. See [security policy](SECURITY.md) for reporting and the narrowly scoped, expiring exception for a withdrawn advisory still reported by npm.
 
 Keep live databases, credentials and Discord state out of Git. Runtime mounts and secrets are configured in `compose.yaml`.

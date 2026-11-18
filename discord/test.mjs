@@ -17,7 +17,7 @@ test('signed PING, invalid signature, stale timestamp and tampered body', async 
   const server = createServer(bot.request); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => server.close());
   const url = `http://127.0.0.1:${server.address().port}/discord/interactions`;
-  const body = JSON.stringify({ type: 1 }); const timestamp = String(now / 1000);
+  const body = JSON.stringify({ id: '1', type: 1 }); const timestamp = String(now / 1000);
   const signature = sign(null, Buffer.from(timestamp + body), pair.privateKey).toString('hex');
   const post = (content = body, ts = timestamp, sig = signature) => fetch(url, { method: 'POST', body: content, headers: { 'x-signature-timestamp': ts, 'x-signature-ed25519': sig } });
   assert.deepEqual(await (await post()).json(), { type: 1 });
@@ -151,4 +151,156 @@ test('updates fail privately when storage fails', async () => {
   const bot = make(undefined, { subscriptionStore: { enable: async () => { throw new Error('private path'); } } });
   const result = await bot.handle(updates('enable'));
   assert.equal(result.data.flags, 64); assert.match(result.data.content, /could not be saved/); assert.ok(!result.data.content.includes('private path'));
+});
+
+async function signedClient(t, bot) {
+  const server = createServer(bot.request);
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  return (interaction, timestamp = now / 1000, invalidSignature = false) => {
+    const body = JSON.stringify(interaction), stamp = String(timestamp);
+    const signature = invalidSignature ? '0'.repeat(128) : sign(null, Buffer.from(stamp + body), pair.privateKey).toString('hex');
+    return fetch(`http://127.0.0.1:${server.address().port}/interactions`, { method: 'POST', body, headers: { 'x-signature-timestamp': stamp, 'x-signature-ed25519': signature } });
+  };
+}
+
+test('signed enable-disable-replay preserves disabled state and the original response', async t => {
+  const { store } = await fixtureStore(t);
+  const post = await signedClient(t, make(undefined, { subscriptionStore: store }));
+  const enable = { ...updates('enable'), id: '101' };
+  const original = await (await post(enable)).json();
+  await post({ ...updates('disable'), id: '102' });
+  const disabled = await store.get('999');
+  assert.equal(disabled.enabled, false);
+  assert.deepEqual(await (await post(enable)).json(), original);
+  assert.deepEqual(await store.get('999'), disabled);
+});
+
+test('concurrent signed duplicates share one pending operation', async t => {
+  let calls = 0, release;
+  const wait = new Promise(resolve => { release = resolve; });
+  const store = { enable: async () => { calls++; await wait; return { channelId: '888' }; } };
+  const post = await signedClient(t, make(undefined, { subscriptionStore: store }));
+  const interaction = { ...updates('enable'), id: '201' };
+  const pending = [post(interaction), post(interaction)];
+  while (!calls) await new Promise(resolve => setTimeout(resolve, 1));
+  release();
+  const responses = await Promise.all(pending);
+  assert.deepEqual(await responses[0].json(), await responses[1].json());
+  assert.equal(calls, 1);
+});
+
+test('cache retains future timestamps through the inclusive validity boundary and fails closed at capacity', async t => {
+  let clock = now, calls = 0;
+  const bot = make(async () => { calls++; return new Response(JSON.stringify(health)); }, { now: () => clock, replayCacheLimit: 1 });
+  const post = await signedClient(t, bot);
+  const future = now / 1000 + 300;
+  const interaction = { ...command('status'), id: '301' };
+  const original = await (await post(interaction, future)).json();
+  assert.equal(calls, 1);
+  assert.equal((await post({ id: '302', type: 1 })).status, 503);
+  clock = now + 600000;
+  assert.deepEqual(await (await post(interaction, future)).json(), original);
+  assert.equal(calls, 1);
+  assert.equal((await post({ id: '302', type: 1 }, clock / 1000)).status, 503);
+  clock++;
+  assert.equal((await post(interaction, future)).status, 401);
+  assert.equal((await post({ id: '302', type: 1 }, Math.floor(clock / 1000))).status, 200);
+});
+
+test('invalid signatures cannot poison cache and invalid IDs fail before handling', async t => {
+  let calls = 0;
+  const post = await signedClient(t, make(async () => { calls++; return new Response(JSON.stringify(health)); }, { replayCacheLimit: 1 }));
+  const interaction = { ...command('status'), id: '401' };
+  assert.equal((await post(interaction, now / 1000, true)).status, 401);
+  for (const id of [undefined, null, 123, '', 'bad', '1'.repeat(21)]) {
+    assert.equal((await post({ ...interaction, id })).status, 400);
+  }
+  assert.equal(calls, 0);
+  assert.equal((await post(interaction)).status, 200);
+  assert.equal(calls, 1);
+});
+
+import { createReplayStore } from './replay.mjs';
+
+test('durable mutation responses prevent enable replay after receiver restart and disable', async t => {
+  const { directory, store } = await fixtureStore(t);
+  const replayDirectory = join(directory, 'replays');
+  const newBot = () => make(undefined, { subscriptionStore: store, replayStore: createReplayStore({ directory: replayDirectory, now: () => now }) });
+  const first = await signedClient(t, newBot());
+  const enable = { ...updates('enable'), id: '501' };
+  const original = await (await first(enable)).json();
+  await first({ ...updates('disable'), id: '502' });
+  const disabled = await store.get('999');
+  const restarted = await signedClient(t, newBot());
+  assert.deepEqual(await (await restarted(enable)).json(), original);
+  assert.deepEqual(await store.get('999'), disabled);
+  const record = JSON.parse(await readFile(join(replayDirectory, '501.json'), 'utf8'));
+  assert.deepEqual(Object.keys(record).sort(), ['expires', 'response', 'state']);
+});
+
+test('durable replay storage fails closed on disk errors and incomplete operations', async t => {
+  const { directory } = await fixtureStore(t);
+  const blocked = join(directory, 'not-a-directory');
+  await (await import('node:fs/promises')).writeFile(blocked, 'fixture');
+  let touched = 0;
+  const post = await signedClient(t, make(undefined, { replayStore: createReplayStore({ directory: blocked }), subscriptionStore: { enable: async () => { touched++; } } }));
+  assert.equal((await post({ ...updates('enable'), id: '601' })).status, 503);
+  assert.equal(touched, 0);
+  const replayDirectory = join(directory, 'replays');
+  const store = createReplayStore({ directory: replayDirectory, now: () => now });
+  assert.equal((await store.run('602', now + 300000, async () => { touched++; throw new Error('crash after mutation'); })).status, 503);
+  const restarted = createReplayStore({ directory: replayDirectory, now: () => now });
+  assert.equal((await restarted.run('602', now + 300000, async () => { touched++; })).status, 503);
+  assert.equal(touched, 1);
+});
+
+test('durable replay expiry is inclusive and cleanup bounds files', async t => {
+  const { directory } = await fixtureStore(t);
+  const replayDirectory = join(directory, 'replays');
+  let clock = now;
+  const store = createReplayStore({ directory: replayDirectory, now: () => clock, limit: 1 });
+  const response = { type: 4, data: { content: 'fixture' } };
+  assert.equal((await store.run('701', now + 600000, async () => response)).status, 200);
+  clock += 600000;
+  assert.equal((await store.run('702', clock + 300000, async () => response)).status, 503);
+  clock++;
+  assert.equal((await store.run('702', clock + 300000, async () => response)).status, 200);
+  assert.deepEqual(await readdir(replayDirectory), ['702.json']);
+});
+
+test('idle pruning removes expired responses and pending tombstones without a new interaction', async t => {
+  const { directory } = await fixtureStore(t);
+  const replayDirectory = join(directory, 'replays');
+  let clock = now;
+  const store = createReplayStore({ directory: replayDirectory, now: () => clock });
+  await store.run('801', now + 1000, async () => ({ type: 1 }));
+  await store.run('802', now + 1000, async () => { throw new Error('interrupted'); });
+  clock += 1000;
+  await store.prune();
+  assert.equal((await readdir(replayDirectory)).length, 2);
+  clock++;
+  assert.equal(await store.prune(), true);
+  assert.deepEqual(await readdir(replayDirectory), []);
+});
+
+test('prune serializes with operations and expired queued mutations fail closed', async t => {
+  const { directory } = await fixtureStore(t);
+  const replayDirectory = join(directory, 'replays');
+  let clock = now, release, entered;
+  const started = new Promise(resolve => { entered = resolve; });
+  const blocked = new Promise(resolve => { release = resolve; });
+  const store = createReplayStore({ directory: replayDirectory, now: () => clock });
+  const pending = store.run('901', now + 10000, async () => { entered(); await blocked; return { type: 1 }; });
+  await started;
+  const pruning = store.prune();
+  let touched = false;
+  const stale = store.run('902', now + 1000, async () => { touched = true; return { type: 1 }; });
+  clock += 1001;
+  release();
+  assert.equal((await pending).status, 200);
+  assert.equal(await pruning, true);
+  assert.equal((await stale).status, 503);
+  assert.equal(touched, false);
+  assert.deepEqual(await readdir(replayDirectory), ['901.json']);
 });

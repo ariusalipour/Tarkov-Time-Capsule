@@ -1,0 +1,87 @@
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '23 7 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            api/package-lock.json
+            web/package-lock.json
+      - run: npm ci --prefix api
+      - run: node --test scripts/check-audit.test.mjs
+      - name: Audit API dependencies
+        run: |
+          npm audit --prefix api --json > /tmp/api-audit.json || true
+          node scripts/check-audit.mjs /tmp/api-audit.json
+      - run: npm test --prefix api
+      - run: npm run build --prefix api
+      - run: npm test --prefix discord
+      - run: npm ci --prefix web
+      - name: Audit web dependencies
+        run: |
+          npm audit --prefix web --json > /tmp/web-audit.json || true
+          node scripts/check-audit.mjs /tmp/web-audit.json
+      - run: npm test --prefix web
+      - run: npm run build --prefix web
+      - run: docker compose --profile discord --profile discord-updates build
+      - name: Test API against the production runtime
+        run: >-
+          docker run --rm --network none --read-only --tmpfs /tmp:size=64m
+          --memory=512m --pids-limit=128 --cap-drop=ALL --security-opt=no-new-privileges:true
+          -v "$PWD/api:/tests:ro" --entrypoint /nodejs/bin/node
+          tarkov-time-capsule:local --test /tests/test/api.test.mjs
+          /tests/test/runtime.test.mjs /tests/test/security.test.mjs /tests/test/upstream.test.mjs
+      - name: Test bot against the production runtime
+        run: >-
+          docker run --rm --network none --read-only --tmpfs /tmp:size=64m
+          --memory=128m --pids-limit=64 --cap-drop=ALL --security-opt=no-new-privileges:true
+          -v "$PWD/discord:/tests:ro" --entrypoint /nodejs/bin/node
+          tarkov-time-capsule-discord:local --test /tests/test.mjs /tests/updates/updates.test.mjs
+      - name: Scan production images for high and critical vulnerabilities
+        run: |
+          status=0
+          for service in app discord discord-updates; do
+            image="tarkov-time-capsule-${service}:local"
+            if [ "$service" = app ]; then image=tarkov-time-capsule:local; fi
+            archive="/tmp/tarkov-${service}-image.tar"
+            docker save -o "$archive" "$image"
+            chmod 644 "$archive"
+            docker run --rm --cpus=1 --memory=768m --cap-drop=ALL --security-opt=no-new-privileges:true \
+              -v tarkov-ci-trivy-cache:/root/.cache -v "$archive:/scan/image.tar:ro" \
+              aquasec/trivy@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb \
+              image --input /scan/image.tar --scanners vuln --exit-code 1 --severity HIGH,CRITICAL \
+              --format json > "/tmp/${service}-image-audit.json" || status=1
+          done
+          exit "$status"
+      - name: Save dependency audit reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dependency-audits
+          path: |
+            /tmp/api-audit.json
+            /tmp/web-audit.json
+            /tmp/*-image-audit.json
+          retention-days: 14

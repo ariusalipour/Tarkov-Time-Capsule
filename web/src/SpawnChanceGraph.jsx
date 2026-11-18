@@ -1,18 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js';
-import { apiUrl, cleanRecords, initialFilters, nextDay, percent, queryUrl, recentRange, seriesFrom, utcTime } from './archiveData';
+import { apiUrl, cleanRecords, recordsCsv, initialFilters, nextDay, percent, queryUrl, recentRange, seriesFrom, utcTime } from './archiveData';
 
 ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);
 async function readJson(url, signal) {
   const response = await fetch(url, { signal });
-  if (!response.ok) throw new Error(`Request failed (${response.status})`);
+  if (!response.ok) {
+    if (response.status === 413) throw new Error('This view contains too many observations (maximum 10,000). Choose a shorter date range or select a map and boss, then apply filters.');
+    if (response.status === 429) throw new Error('Too many requests. Wait a moment before retrying.');
+    if (response.status === 400) throw new Error('The API could not accept these filters. Check the dates and filter values, then apply filters.');
+    throw new Error(`Request failed (${response.status}). Try the request again.`);
+  }
   return response.json();
 }
 function downloadCsv(records) {
-  const quote = value => `"${String(value).replace(/"/g, '""')}"`;
-  const rows = [['Map', 'Boss', 'Timestamp UTC', 'Spawn chance (%)'], ...records.map(row => [row.MapName, row.BossName, row.Timestamp, Number(row.Chance) * 100])];
-  const url = URL.createObjectURL(new Blob([rows.map(row => row.map(quote).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8;' }));
+  const url = URL.createObjectURL(new Blob([recordsCsv(records)], { type: 'text/csv;charset=utf-8;' }));
   const anchor = document.createElement('a');
   anchor.href = url; anchor.download = 'tarkov-spawn-history.csv'; anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -129,7 +132,7 @@ export default function SpawnChanceGraph() {
         <section className="results" id="history" aria-labelledby="history-title" aria-busy={result.state === 'loading'}>
           <div className="results-heading"><div><h2 id="history-title">{applied.bossName || 'All bosses'} <span>· {applied.mapName || 'All maps'}</span></h2><p className="applied-range">{applied.startDate} <span>→</span> {applied.endDate} <span>· UTC</span></p></div><button className="export-button" aria-label="Export CSV" onClick={() => downloadCsv(result.records)} disabled={!result.records.length || result.state !== 'ready'}>↓ <span>Export CSV</span></button></div>
           {result.state === 'loading' && <div className="state-panel" role="status"><span className="loading-bars" aria-hidden="true"><i /><i /><i /><i /><i /></span><h3>Loading history</h3><p>Finding observations for this view…</p></div>}
-          {result.state === 'error' && <div className="state-panel error-panel" role="alert"><span className="state-symbol">!</span><h3>History couldn’t be loaded</h3><p>{result.error}. Your filters are saved. Try the request again.</p><button className="secondary-button" onClick={() => setRefresh(value => value + 1)}>Retry request</button></div>}
+          {result.state === 'error' && <div className="state-panel error-panel" role="alert"><span className="state-symbol">!</span><h3>History couldn’t be loaded</h3><p>{result.error} Your filters are saved.</p><button className="secondary-button" onClick={() => setRefresh(value => value + 1)}>Retry request</button></div>}
           {result.state === 'ready' && !result.records.length && <div className="state-panel"><span className="state-symbol">∅</span><h3>No observations in this view</h3><p>Try a wider time window or a different map and boss.<br />No data does not mean a 0% spawn chance.</p><button className="secondary-button" onClick={() => { const range = recentRange(90); setDraft(current => ({ ...current, ...range })); setApplied(current => ({ ...current, ...range })); }}>Explore the last 90 days</button></div>}
           {result.state === 'ready' && result.records.length > 0 && <>
             <div className="view-stats"><div><span className="field-caption">{series.length === 1 ? 'Latest in selected dates' : 'Series'}</span><strong>{series.length === 1 ? percent(Number(latest.Chance) * 100) : series.length}<span>{series.length === 1 ? 'spawn chance' : 'map / boss combinations'}</span></strong></div><div><span className="field-caption">Observations</span><strong>{result.records.length.toLocaleString('en-GB')}<span>{utcTime(latest.Timestamp)}</span></strong></div></div>

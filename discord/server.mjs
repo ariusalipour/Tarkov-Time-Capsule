@@ -3,15 +3,18 @@ import { createPublicKey, createHmac, timingSafeEqual, verify } from 'node:crypt
 import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { createSubscriptionStore, manageUpdates } from './subscriptions.mjs';
+import { createReplayStore } from './replay.mjs';
 
 const clean = value => String(value ?? '').replace(/[\\`*_~|<>@]/g, '').replace(/[\r\n]/g, ' ').slice(0, 100);
 const message = (content, ephemeral = false) => ({ type: 4, data: { content: content.slice(0, 1900), allowed_mentions: { parse: [] }, ...(ephemeral ? { flags: 64 } : {}) } });
 const ownerOf = i => i.member?.user?.id || i.user?.id;
 const toMillis = value => typeof value === 'number' ? value * 1000 : Date.parse(value);
 
-export function createBot({ publicKey, componentSecret, apiBase = 'http://app:3000', publicAppUrl = 'https://tarkovcapsule.mockachino.app', fetchImpl = fetch, now = Date.now, deadlineMs = 1700, subscriptionStore = createSubscriptionStore() }) {
+export function createBot({ publicKey, componentSecret, apiBase = 'http://app:3000', publicAppUrl = 'https://tarkovcapsule.mockachino.app', fetchImpl = fetch, now = Date.now, deadlineMs = 1700, replayCacheLimit = 10000, replayStore, subscriptionStore = createSubscriptionStore() }) {
   if (!/^[a-f\d]{64}$/i.test(publicKey || '')) throw new Error('DISCORD_PUBLIC_KEY must be 64 hexadecimal characters');
   if (!componentSecret || componentSecret.length < 32) throw new Error('DISCORD_COMPONENT_SECRET must contain at least 32 characters');
+  if (!Number.isSafeInteger(replayCacheLimit) || replayCacheLimit < 1) throw new Error('replayCacheLimit must be a positive integer');
+  const interactions = new Map();
   const key = createPublicKey({ key: Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), Buffer.from(publicKey, 'hex')]), format: 'der', type: 'spki' });
   const sign = text => createHmac('sha256', componentSecret).update(text).digest('base64url').slice(0, 16);
   const filters = new Map();
@@ -108,10 +111,32 @@ export function createBot({ publicKey, componentSecret, apiBase = 'http://app:30
       for await (const chunk of req) { size += chunk.length; if (size > 65536) return send(413, { error: 'Request too large' }); chunks.push(chunk); }
       const raw = Buffer.concat(chunks);
       if (!verify(null, Buffer.concat([Buffer.from(timestamp), raw]), key, Buffer.from(signature, 'hex'))) return send(401, { error: 'Invalid signature' });
+      if (Math.abs(now() / 1000 - Number(timestamp)) > 300) return send(401, { error: 'Invalid signature' });
       let interaction;
       try { interaction = JSON.parse(raw.toString('utf8')); } catch { return send(400, { error: 'Invalid JSON' }); }
       if (!interaction || typeof interaction !== 'object') return send(400, { error: 'Invalid interaction' });
-      return send(200, await handle(interaction));
+      if (typeof interaction.id !== 'string' || !/^\d{1,20}$/.test(interaction.id)) return send(400, { error: 'Invalid interaction ID' });
+      // Keep responses through the entire accepted timestamp window, including its
+      // boundary. A future-dated request can remain valid for up to ten minutes.
+      for (const [id, entry] of interactions) if (entry.expires < now()) interactions.delete(id);
+      let entry = interactions.get(interaction.id);
+      if (!entry) {
+        // Never evict a still-valid ID to admit another request: doing so would
+        // let a replay execute again. Cache before handling concurrent requests.
+        if (interactions.size >= replayCacheLimit) return send(503, { error: 'Interaction capacity reached; retry shortly' });
+        const expires = (Number(timestamp) + 300) * 1000;
+        const mutation = interaction.type === 2 && interaction.data?.name === 'updates' && ['enable', 'disable'].includes(interaction.data.options?.[0]?.name);
+        entry = { expires, durable: mutation && Boolean(replayStore), response: Promise.resolve().then(() => mutation && replayStore ? replayStore.run(interaction.id, expires, () => handle(interaction)) : handle(interaction).then(body => ({ status: 200, body }))) };
+        interactions.set(interaction.id, entry);
+      } else if ((Number(timestamp) + 300) * 1000 > entry.expires) {
+        entry.expires = (Number(timestamp) + 300) * 1000;
+        if (entry.durable) {
+          const expires = entry.expires;
+          entry.response = entry.response.then(() => replayStore.run(interaction.id, expires, () => { throw new Error('Missing replay record'); }));
+        }
+      }
+      const result = await entry.response;
+      return send(result.status, result.body);
     } catch { if (!res.headersSent) send(400, { error: 'Invalid request' }); }
   }
   return { request, handle };
@@ -119,9 +144,14 @@ export function createBot({ publicKey, componentSecret, apiBase = 'http://app:30
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const componentSecret = process.env.DISCORD_COMPONENT_SECRET_FILE ? readFileSync(process.env.DISCORD_COMPONENT_SECRET_FILE, 'utf8').trim() : process.env.DISCORD_COMPONENT_SECRET;
-  const bot = createBot({ publicKey: process.env.DISCORD_PUBLIC_KEY, componentSecret, apiBase: process.env.API_BASE_URL, publicAppUrl: process.env.PUBLIC_APP_URL, subscriptionStore: createSubscriptionStore({ directory: process.env.DISCORD_SUBSCRIPTIONS_DIR || '/data/subscriptions' }) });
+  const replayStore = createReplayStore({ directory: process.env.DISCORD_REPLAY_DIR || '/data/replays' });
+  const pruneReplays = async () => { if (!await replayStore.prune()) console.error('Discord replay cleanup failed; check replay storage'); };
+  await pruneReplays();
+  const replayCleanup = setInterval(pruneReplays, 60000);
+  replayCleanup.unref();
+  const bot = createBot({ publicKey: process.env.DISCORD_PUBLIC_KEY, componentSecret, apiBase: process.env.API_BASE_URL, publicAppUrl: process.env.PUBLIC_APP_URL, replayStore, subscriptionStore: createSubscriptionStore({ directory: process.env.DISCORD_SUBSCRIPTIONS_DIR || '/data/subscriptions' }) });
   const server = createServer(bot.request);
   server.requestTimeout = 5000; server.headersTimeout = 5000;
   server.listen(Number(process.env.PORT || 3000), '0.0.0.0', () => console.info('Discord interactions listening'));
-  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close());
+  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { clearInterval(replayCleanup); server.close(); });
 }
