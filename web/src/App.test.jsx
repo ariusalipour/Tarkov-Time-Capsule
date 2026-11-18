@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 import { cleanRecords, csvCell, recordsCsv, nextDay, queryUrl, recentRange, seriesFrom, summarySeries, historyUrl, rawRecords, utcTime } from './archiveData';
 
@@ -8,6 +8,13 @@ vi.mock('react-chartjs-2', () => ({ Line: props => <div role="img" aria-label={p
 vi.mock('chart.js', () => ({ Chart: { register: vi.fn() }, LinearScale: {}, PointElement: {}, LineElement: {}, Tooltip: {}, Legend: {} }));
 const json = data => Promise.resolve({ ok: true, json: () => Promise.resolve(Array.isArray(data) && data.length === 0 ? { series: [], resolution: 'hour' } : data) });
 const record = (Timestamp, Chance = 0.3, BossName = 'Reshala', MapName = 'Customs') => ({ Timestamp, Chance, BossName, MapName });
+const openObservations = () => fireEvent.click(screen.getByRole('tab', { name: 'Observations' }));
+const selectOption = async (label, value) => {
+  const trigger = screen.getByRole('button', { name: new RegExp(`^${label} `) });
+  await waitFor(() => expect(trigger).not.toHaveAttribute('aria-disabled', 'true'));
+  fireEvent.click(trigger);
+  fireEvent.click(await within(screen.getByRole('listbox', { name: label })).findByRole('option', { name: value }));
+};
 const window = { startDate: '2026-11-01', endDate: '2026-11-18' };
 const metadata = url => {
   if (url.includes('/api/history?')) return json({ records: [], nextCursor: null, snapshotId: 1 });
@@ -49,9 +56,8 @@ test('map and boss edits wait for Apply filters and request gets aborted when re
   });
   render(<App />);
   await screen.findByText('No observations in this view');
-  await waitFor(() => expect(screen.getByLabelText('Map')).toBeEnabled());
-  fireEvent.change(screen.getByLabelText('Map'), { target: { value: 'Woods' } });
-  fireEvent.change(screen.getByLabelText('Boss'), { target: { value: 'Shturman' } });
+  await selectOption('Map', 'Woods');
+  await selectOption('Boss', 'Shturman');
   expect(requests).toHaveLength(1);
   expect(screen.getByText('Unapplied changes')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
@@ -82,7 +88,8 @@ test('request failure shows retry and recovers to an honest empty state', async 
   fireEvent.click(screen.getByRole('button', { name: /Retry request/ }));
   await screen.findByText('No observations in this view');
   expect(screen.getByText(/No data does not mean a 0%/)).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Export page CSV' })).toBeDisabled();
+  openObservations();
+  expect(screen.getByRole('button', { name: 'Export page CSV' })).toHaveAttribute('aria-disabled', 'true');
 });
 test('invalid date order prevents a query and health failures do not block history', async () => {
   global.fetch = vi.fn(url => url.includes('healthz') ? Promise.reject(new Error('Unavailable')) : metadata(url) || json([]));
@@ -93,7 +100,7 @@ test('invalid date order prevents a query and health failures do not block histo
   fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-12-10' } });
   fireEvent.change(screen.getByLabelText('Through'), { target: { value: '2026-12-01' } });
   fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
-  expect(screen.getByRole('alert')).toHaveTextContent('end date must be on or after');
+  expect(within(screen.getByRole('complementary', { name: 'Archive filters' })).getByRole('alert')).toHaveTextContent('end date must be on or after');
   expect(global.fetch.mock.calls.filter(([url]) => url.includes('history/summary'))).toHaveLength(before);
 });
 
@@ -112,8 +119,8 @@ test.each([
 ])('API %s errors give actionable guidance and keep filters editable', async (status, message) => {
   global.fetch = vi.fn(url => metadata(url) || Promise.resolve({ ok: false, status }));
   render(<App />);
-  expect(await screen.findByRole('alert')).toHaveTextContent(message);
-  expect(screen.getByRole('button', { name: 'Apply filters' })).toBeEnabled();
+  expect(await within(screen.getByRole('tabpanel', { name: 'History' })).findByRole('alert')).toHaveTextContent(message);
+  expect(screen.getByRole('button', { name: 'Apply filters' })).not.toHaveAttribute('aria-disabled', 'true');
 });
 
 test('summary pipeline preserves segment gaps, ranges, counts and exact latest values', () => {
@@ -136,7 +143,8 @@ test('raw pagination aborts replaced requests, rejects stale results and resets 
     return metadata(url) || json([]);
   });
   render(<App />);
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Next page' })).toBeEnabled());
+  openObservations();
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Next page' })).not.toHaveAttribute('aria-disabled', 'true'));
   fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
   await waitFor(() => expect(requests).toHaveLength(2));
   expect(requests[0].signal.aborted).toBe(true);
@@ -148,8 +156,8 @@ test('raw pagination aborts replaced requests, rejects stale results and resets 
   await act(async () => resolveSecond({ ok: true, json: () => Promise.resolve({ records: [{ id: 2, mapName: 'Old', bossName: 'Old', spawnChance: .99, timestamp: new Date().toISOString() }], nextCursor: null }) }));
   expect(screen.queryByText('Old')).not.toBeInTheDocument();
   expect(screen.getByText('Page 1 - 1 observations')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Export page CSV' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Previous page' })).toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByRole('button', { name: 'Export page CSV' })).not.toHaveAttribute('aria-disabled', 'true');
 });
 
 test('long-history summaries show resolution and full-window statistics independently of the raw page', async () => {
@@ -161,9 +169,10 @@ test('long-history summaries show resolution and full-window statistics independ
   await screen.findByText('Weekly average spawn chance');
   expect(screen.getAllByText('900')).toHaveLength(2);
   expect(screen.getAllByText('60%')).toHaveLength(2);
-  expect(screen.getByText(/Weekly averages/)).toBeInTheDocument();
-  expect(screen.getByText('No raw observations on this page.')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Export page CSV' })).toBeDisabled();
+  expect(screen.getAllByText(/Weekly averages/)).toHaveLength(2);
+  openObservations();
+  expect(screen.getByText('No raw observations on this page.')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Export page CSV' })).toHaveAttribute('aria-disabled', 'true');
 });
 
 test('expired page cursor restarts raw observations from the first page', async () => {
@@ -177,16 +186,75 @@ test('expired page cursor restarts raw observations from the first page', async 
     return metadata(url) || json([]);
   });
   render(<App />);
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Next page' })).toBeEnabled());
+  openObservations();
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Next page' })).not.toHaveAttribute('aria-disabled', 'true'));
   fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
   await screen.findByRole('button', { name: 'Restart observations' });
   fireEvent.click(screen.getByRole('button', { name: 'Restart observations' }));
   await waitFor(() => expect(requests).toHaveLength(3));
   expect(requests[2]).not.toContain('cursor=');
   expect(await screen.findByText('Page 1 - 1 observations')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Previous page' })).toHaveAttribute('aria-disabled', 'true');
 });
 test('new history and summary endpoints end at the final millisecond of the selected UTC day', () => {
   const url = new URL(historyUrl({ ...window }), 'https://example.com');
   expect(url.searchParams.get('endDate')).toBe('2026-11-18T23:59:59.999Z');
+});
+
+test('searchable Astryx selectors support keyboard selection and keep changes unapplied', async () => {
+  global.fetch = vi.fn(url => metadata(url) || json([]));
+  render(<App />);
+  await screen.findByText('No observations in this view');
+  const trigger = screen.getByRole('button', { name: 'Map Customs' });
+  await waitFor(() => expect(trigger).not.toHaveAttribute('aria-disabled', 'true'));
+  act(() => trigger.focus());
+  fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  const search = screen.getByPlaceholderText('Find a map…');
+  await waitFor(() => expect(search).toHaveFocus());
+  fireEvent.change(search, { target: { value: 'woo' } });
+  const options = within(screen.getByRole('listbox', { name: 'Map' }));
+  expect(options.getAllByRole('option')).toHaveLength(1);
+  expect(options.getByRole('option', { name: 'Woods' })).toBeInTheDocument();
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  expect(search).toHaveAttribute('aria-activedescendant', options.getByRole('option', { name: 'Woods' }).id);
+  fireEvent.keyDown(search, { key: 'Enter' });
+  expect(screen.getByRole('button', { name: 'Map Woods' })).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.getByText('Unapplied changes')).toBeInTheDocument();
+  expect(global.fetch.mock.calls.filter(([url]) => url.includes('history/summary'))).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
+  await waitFor(() => expect(global.fetch.mock.calls.filter(([url]) => url.includes('history/summary'))).toHaveLength(2));
+  expect(global.fetch.mock.calls.filter(([url]) => url.includes('history/summary')).at(-1)[0]).toContain('mapName=Woods');
+});
+
+test('tabs support arrow-key focus and explicit activation without refetching or losing filters', async () => {
+  global.fetch = vi.fn(url => metadata(url) || json([]));
+  render(<App />);
+  await screen.findByText('No observations in this view');
+  const history = screen.getByRole('tab', { name: 'History' });
+  const observations = screen.getByRole('tab', { name: 'Observations' });
+  expect(history).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('tabpanel', { name: 'History' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Export page CSV' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '30 days' }));
+  const calls = global.fetch.mock.calls.length;
+  act(() => history.focus());
+  fireEvent.keyDown(history, { key: 'ArrowRight' });
+  expect(observations).toHaveFocus();
+  expect(observations).toHaveAttribute('aria-selected', 'false');
+  // Native button keyboard activation emits a click; JSDOM does not synthesize it.
+  fireEvent.click(observations, { detail: 0 });
+  expect(observations).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('tabpanel', { name: 'Observations' })).toBeVisible();
+  expect(screen.queryByRole('tabpanel', { name: 'History' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Export page CSV' })).toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByRole('button', { name: 'Previous page' })).toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByRole('button', { name: 'Next page' })).toHaveAttribute('aria-disabled', 'true');
+  fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+  fireEvent.keyDown(observations, { key: 'ArrowLeft' });
+  expect(history).toHaveFocus();
+  fireEvent.click(history, { detail: 0 });
+  expect(history).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByText('Unapplied changes')).toBeInTheDocument();
+  expect(global.fetch).toHaveBeenCalledTimes(calls);
 });
