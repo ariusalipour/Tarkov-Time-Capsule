@@ -29,6 +29,12 @@ Collection is disabled by default. Set `SCHEDULER_ENABLED=true` after checking t
 
 For local web development, run `npm ci` and `npm start` in `web/`, with `VITE_API_URL` pointing to the API. In `api/`, run `npm ci`, `npm run build`, then `DATABASE_PATH=../data/tarkov-time-capsule.sqlite STATIC_DIR=../web/dist npm start`.
 
+### Web interface
+
+The dark archive workspace uses [Meta Astryx](https://github.com/meta/astryx) with React 19, its neutral theme and self-hosted Figtree. Theme tokens and responsive layout live in `web/src/App.css`; no external font service or StyleX compiler is required. Astryx components use their supported per-component imports and prebuilt CSS.
+
+Map and boss selectors support search and keyboard navigation. Changes are staged until **Apply filters**; mobile filters collapse after applying. **History** shows full-window aggregates and series summaries, while **Observations** contains paginated source records and an explicitly page-scoped CSV export. Tab arrow keys move focus; Enter or Space activates a view. All dates use UTC.
+
 ## API
 
 - `GET /api/maps`
