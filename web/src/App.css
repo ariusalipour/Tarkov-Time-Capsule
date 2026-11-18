@@ -9,3 +9,5 @@
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 
 .mobile-collection-status{display:none}@media(max-width:760px){.mobile-collection-status{display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:11px;color:#b5bfce}}
+
+.pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0 22px}.pagination span,.raw-status{font-size:12px;color:var(--muted)}.raw-status{padding:10px 0 20px}@media(max-width:760px){.pagination{gap:8px}.pagination span{font-size:10px}.pagination button{padding:0 8px;font-size:11px}}

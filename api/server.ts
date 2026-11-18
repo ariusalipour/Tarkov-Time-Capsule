@@ -20,7 +20,7 @@ const collector = createCollector({
 });
 const stopScheduler = startHourlyScheduler(collector);
 console.info('Collector upstream', upstreamSource);
-const server = createHttpServer({ db, collector, staticRoot, source: upstreamSource });
+const server = createHttpServer({ db, collector, staticRoot, source: upstreamSource, edgeRateLimited: process.env.API_EDGE_RATE_LIMITED === 'true' });
 const port = Number(process.env.PORT || 3000);
 server.listen(port, '0.0.0.0', () => console.info(`Listening on ${port}; hourly collection ${enabled ? 'enabled' : 'disabled'}`));
 let stopping = false;

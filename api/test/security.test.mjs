@@ -62,3 +62,19 @@ test('HTTP security headers, spoof-resistant rate limiting, traversal and fresh 
     assert.equal((await fetch(base+'/%5csecret')).status,400);
   } finally { await new Promise(resolve=>server.close(resolve)); db.close(); rmSync(directory,{recursive:true,force:true}); }
 });
+
+test('verified edge mode retains global containment without a tighter tunnel-address budget',async()=>{
+ const db=database();
+ const server=createHttpServer({db,staticRoot:'.',collector:{state:{enabled:false}},source:'test',now:()=>1000,edgeRateLimited:true});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ const base=`http://127.0.0.1:${server.address().port}`;
+ try{
+  for(let i=0;i<30;i++){
+   const response=await fetch(base+'/api/maps',{headers:{'CF-Connecting-IP':`192.0.2.${i+1}`,'X-Forwarded-For':`192.0.2.${i+1}`}});
+   assert.equal(response.status,200,`request ${i+1}`);await response.text();
+  }
+  for(const headers of [{},{'CF-Connecting-IP':'198.51.100.1','X-Forwarded-For':'198.51.100.1'}]){
+   const response=await fetch(base+'/api/maps',{headers});assert.equal(response.status,429);await response.text();
+  }
+ }finally{await new Promise(resolve=>server.close(resolve));db.close();}
+});

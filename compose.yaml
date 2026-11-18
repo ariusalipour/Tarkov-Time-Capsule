@@ -13,6 +13,7 @@ services:
       - "${BIND_ADDRESS:-127.0.0.1}:${HTTP_PORT:-3040}:3000"
     environment:
       SCHEDULER_ENABLED: "${SCHEDULER_ENABLED:-false}"
+      API_EDGE_RATE_LIMITED: "${API_EDGE_RATE_LIMITED:-false}"
       DATABASE_PATH: /data/tarkov-time-capsule.sqlite
       STATIC_DIR: /app/public
       PORT: "3000"

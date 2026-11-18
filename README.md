@@ -33,15 +33,35 @@ For local web development, run `npm ci` and `npm start` in `web/`, with `VITE_AP
 
 - `GET /api/maps`
 - `GET /api/bosses`
-- `GET /api/spawnchance?startDate=2026-11-18&endDate=2026-11-19` — optional `mapName`, `bossName` and `groupBy` (`boss`, `map`, `timestamp`).
+- `GET /api/history?startDate=2024-11-01&endDate=2026-11-19&limit=250` — paginated raw observations, with optional `mapName`, `bossName` and `cursor`.
+- `GET /api/history/summary?startDate=2024-11-01&endDate=2026-11-19&resolution=auto` — bounded chart aggregates, with optional `mapName` and `bossName`.
+- `GET /api/spawnchance?startDate=2026-11-18&endDate=2026-11-19` — array response with optional `mapName`, `bossName` and `groupBy` (`boss`, `map`, `timestamp`).
 - `GET /api/latestspawnchance` — observations from the preceding hour.
 - `GET /healthz`
 
-History responses contain at most **10,000 observations**. Larger queries return `413` with guidance to shorten the date range or select a map/boss; results are never silently truncated. Invalid dates, reversed ranges, oversized filters and long queries return `400`. Dates accept `YYYY-MM-DD` or an ISO UTC timestamp ending in `Z`.
+Dates accept `YYYY-MM-DD` or an ISO UTC timestamp ending in `Z`. History defaults to the preceding seven days. Invalid dates, reversed ranges, oversized filters and long queries return `400`; the paginated and summary endpoints also reject duplicate query parameters and ranges exceeding 3,660 days.
 
-API reads have a shared budget of 120 requests/minute (burst 30) and a socket-address budget of 60/minute (burst 15). `429` includes `Retry-After`. Reverse-proxy users share an address budget; arbitrary forwarded headers are not trusted. Add client-aware rate limits at your trusted HTTPS edge if needed. `/healthz` caches expensive counts while recalculating freshness on each read.
+### Raw history
 
-Missing observations do not represent zero spawn chances. Archive timestamps are UTC and chances are stored as fractions.
+`/api/history` returns `{ records, nextCursor, snapshotId }`. Each record contains `id`, `mapName`, `bossName`, `spawnChance` and `timestamp`. The default page size is 250; `limit` accepts integers from 1 to 1,000.
+
+Pass `nextCursor` unchanged as the next request's `cursor`, retaining the same filters and any explicit date bounds. Pagination orders by timestamp and observation ID and fixes the maximum observation ID at the first page, so new collector inserts do not shift subsequent pages. A `null` cursor means there are no more records in that snapshot. Cursors are authenticated and expire on application restart; a `400` response asks the client to restart pagination. They are not permanent links or export checkpoints.
+
+### Chart summaries
+
+`/api/history/summary` returns `{ resolution, bucketSeconds, series }`, with one series per map/boss pair. Each point contains its bucket `timestamp`, actual `firstTimestamp` and `lastTimestamp`, `min`, `max`, `average`, `latest`, `count` and collection-gap `segment`. Aggregation runs in SQL; it does not load the full archive into application memory. The web chart displays aggregate averages and exposes observed ranges, counts and latest values in its tooltips, while the table and CSV use raw pages.
+
+`resolution` accepts `auto`, `hour`, `day` or `week`. Automatic resolution uses hourly buckets for ranges up to seven days, daily buckets up to 180 days, and weekly buckets thereafter. Buckets align to UTC Unix-epoch intervals; weekly buckets start on Thursday. Gaps greater than six hours split segments before aggregation, including gaps within one bucket. Missing observations do not represent zero spawn chances, and aggregates must not be presented as continuous observations across gaps.
+
+Summaries allow at most 100 series and 25,000 points. Requests exceeding those bounds return `413` with guidance to filter or select a coarser resolution. The array-based `/api/spawnchance` endpoint retains its 10,000-observation cap and also returns `413` for overflow. Results are never silently truncated. Archive timestamps are UTC and chances are stored as fractions.
+
+### Request budgets
+
+API reads have a shared budget of 120 requests/minute (burst 30). By default each socket address also has a 60/minute budget (burst 15). Arbitrary forwarded headers, including `CF-Connecting-IP` and `X-Forwarded-For`, never establish client identity or buy a new budget. `/healthz` caches expensive counts while recalculating freshness on each read.
+
+`API_EDGE_RATE_LIMITED` defaults to `false`. Set it to `true` only after verifying a trusted public edge enforces per-client rate limits on every public `/api/*` route. This raises the socket-address budget to match the shared 120/minute, burst-30 budget, avoiding a second, tighter shared-address limit on tunnel traffic. Global containment remains active. Direct origin access still shares that budget and should be restricted to trusted networks.
+
+Summary requests additionally share a separate budget of 12/minute (burst 3), because aggregation scans the archive. `429` responses include `Retry-After`; summary-budget exhaustion asks clients to retry after five seconds. These limits bound resource use rather than guaranteeing throughput for every visitor.
 
 ## Discord
 
@@ -59,6 +79,8 @@ See [bot setup](discord/README.md). Server managers use `/updates enable` in the
 
 Run `python3 api/backup.py data/tarkov-time-capsule.sqlite ../backups` for an online SQLite backup with integrity checks and a hash/count manifest. `api/scheduled-backup.py` creates verified daily backups and retains 14 pairs. Schedule it with your host's scheduler. Store an encrypted independent copy of the database, configuration, secrets, Discord state and privacy deletion register.
 
+Run `api/restore-rehearsal.py` weekly against the newest verified backup and the installed production image. It starts an isolated container with collection disabled, verifies application health and a historical API query, removes the disposable container and writes an atomic pass/fail report. See [restore rehearsal](api/RESTORE-REHEARSAL.md) for scheduling, isolation and failure handling.
+
 Stop services before restoring. Verify backup hashes, restore compatible source and state, and keep collection/notifications disabled until database integrity, historical queries and destinations are checked. Restore the privacy deletion register and reapply deletions before enabling delivery. Inspect pending delivery markers before restarting notifications, because a pending message may already have been sent. Run one collector and one notification sender per state directory.
 
 ## Checks
@@ -75,6 +97,6 @@ npm run build --prefix web
 
 Compose limits the app to 512 MiB and one CPU, and each bot process to 128 MiB and half a CPU, with PID and Node heap limits. Adjust deliberately after measuring usage. Production images use a pinned minimal Node runtime without a shell, npm or build tools; use `/nodejs/bin/node` for deliberate runtime diagnostics. The app sends a restrictive Content Security Policy, framing protection, `nosniff` and a referrer policy. Terminate HTTPS and configure HSTS at the public edge.
 
-GitHub Actions runs these checks, dependency audits and container builds on changes and weekly. Dependabot proposes npm, image and Actions updates. See [security policy](SECURITY.md) for reporting and the narrowly scoped, expiring exception for a withdrawn advisory still reported by npm.
+GitHub Actions runs these checks, dependency audits and container builds on changes and weekly. Dependabot proposes npm, image and Actions updates. See [security policy](SECURITY.md) for vulnerability reporting. Dependency audits have no advisory exceptions.
 
 Keep live databases, credentials and Discord state out of Git. Runtime mounts and secrets are configured in `compose.yaml`.

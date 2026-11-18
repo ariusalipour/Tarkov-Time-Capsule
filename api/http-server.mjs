@@ -10,7 +10,7 @@ const securityHeaders = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
 };
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8' };
-const routes = new Set(['/api/maps', '/api/bosses', '/api/spawnchance', '/api/latestspawnchance']);
+const routes = new Set(['/api/maps', '/api/bosses', '/api/spawnchance', '/api/latestspawnchance', '/api/history', '/api/history/summary']);
 
 // Socket addresses are the trust boundary: forwarded headers cannot buy a new budget.
 // A bounded global bucket also covers traffic multiplexed by a reverse proxy.
@@ -37,7 +37,11 @@ export function createQueryLimiter({ now = Date.now, globalBurst = 30, globalPer
   };
 }
 
-export function createHttpServer({ db, collector, staticRoot, source, now = Date.now, queryLimiter = createQueryLimiter({ now }) }) {
+export function createHttpServer({ db, collector, staticRoot, source, now = Date.now, edgeRateLimited = false, queryLimiter = createQueryLimiter({ now, ...(edgeRateLimited ? { addressBurst: 30, addressPerMinute: 120 } : {}) }) }) {
+  // With verified edge enforcement, retain global containment without imposing a
+  // second, tighter shared-address budget on tunnel traffic. Never trust client headers.
+  // Aggregations scan the archive in SQLite: bound their shared CPU budget separately.
+  const summaryLimiter = createQueryLimiter({ now, globalBurst: 3, globalPerMinute: 12, addressBurst: 3, addressPerMinute: 12 });
   let cachedHealth;
   let healthAt = -Infinity;
   let healthVersion;
@@ -70,6 +74,7 @@ export function createHttpServer({ db, collector, staticRoot, source, now = Date
       if (url.pathname.startsWith('/api/')) {
         if (!routes.has(url.pathname)) { outgoing.writeHead(404); outgoing.end(); return; }
         if (!queryLimiter(incoming.socket.remoteAddress || 'unknown')) { json(429, { error: 'Too many requests. Please try again shortly.' }, { 'Retry-After': '1' }); return; }
+        if (url.pathname === '/api/history/summary' && !summaryLimiter('shared')) { json(429, { error: 'History summaries are busy. Please try again shortly.' }, { 'Retry-After': '5' }); return; }
         const response = await handleApiRequest(new Request(url, { method: 'GET' }), db);
         outgoing.writeHead(response.status, Object.fromEntries(response.headers));
         outgoing.end(incoming.method === 'HEAD' ? undefined : Buffer.from(await response.arrayBuffer())); return;
